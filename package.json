@@ -13,7 +13,8 @@
 	"private": false,
 	"dependencies": {
 		"@rubriclab/config": "*",
-		"@rubriclab/package": "*"
+		"@rubriclab/package": "*",
+		"zod": "latest"
 	},
 	"simple-git-hooks": {
 		"post-commit": "bun run rubriclab-postcommit"
