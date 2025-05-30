@@ -62,7 +62,7 @@ function shapeOf<Shape extends SupportedZodTypes>(shape: Shape): ShapeOf<Support
 }
 
 export function createChain<Nodes extends Record<string, GenericNode>>(nodes: Nodes) {
-	// @ts-expect-error - intentionally unused generic. (Stops the type checker from eagerly recursing but still offers intellisense)
+	// @ts-expect-error circular dependency hack
 	type Definition<CIRCUIT_BREAKER extends never> = {
 		definition: ReturnType<typeof createDefinitions>
 		output: SupportedZodTypes
@@ -70,12 +70,20 @@ export function createChain<Nodes extends Record<string, GenericNode>>(nodes: No
 
 	function compatableWith<
 		Type extends SupportedZodTypes,
-		// @ts-expect-error - this is a hack to avoid the circular dependency
+		// @ts-expect-error circular dependency hack
 		Definitions extends Record<string, Definition>
-	>({ type, definitions }: { type: Type; definitions: Definitions }) {
-		return Object.values(definitions)
-			.filter(({ output }) => shapeOf(output) === shapeOf(type))
-			.map(({ definition }) => definition) as {
+	>({ shapeName, type, definitions }: { shapeName: string; type: Type; definitions: Definitions }) {
+		return Object.entries(definitions)
+			.filter(([defName, { output }]) => {
+				console.log('COMPARING', {
+					[defName]: JSON.stringify(shapeOf(output)),
+					[shapeName]: JSON.stringify(shapeOf(type)),
+					equal: JSON.stringify(shapeOf(output)) === JSON.stringify(shapeOf(type)),
+					shapeOf: shapeOf(output) === shapeOf(type)
+				})
+				return JSON.stringify(shapeOf(output)) === JSON.stringify(shapeOf(type))
+			})
+			.map(([_defName, { definition }]) => definition) as {
 			[K in keyof Definitions]: ShapeOf<Definitions[K]['output']> extends ShapeOf<Type>
 				? Definitions[K]['definition']
 				: never
@@ -146,7 +154,10 @@ export function createChain<Nodes extends Record<string, GenericNode>>(nodes: No
 							key,
 							{
 								shape: shapeOf(arg),
-								zod: z.union([arg, ...compatableWith({ type: arg, definitions })])
+								zod: z.union([
+									arg,
+									...compatableWith({ shapeName: `${name}.${key}`, type: arg, definitions })
+								])
 							}
 						]
 					})
