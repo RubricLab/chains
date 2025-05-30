@@ -62,8 +62,8 @@ function shapeOf<Shape extends SupportedZodTypes>(shape: Shape): ShapeOf<Support
 }
 
 export function createChain<Nodes extends Record<string, GenericNode>>(nodes: Nodes) {
-	// CIRCUIT BREAKER
-	type Definition<CIRCUIT_BREAKER> = {
+	// @ts-expect-error - intentionally unused generic. (Stops the type checker from eagerly recursing but still offers intellisense)
+	type Definition<CIRCUIT_BREAKER extends never> = {
 		definition: ReturnType<typeof createDefinitions>
 		output: SupportedZodTypes
 	}
