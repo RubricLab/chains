@@ -1,6 +1,6 @@
 {
 	"scripts": {
-		"prepare": "rubriclab-package prepare",
+		"prepare": "bun x @rubriclab/package prepare",
 		"bleed": "bun x npm-check-updates -u",
 		"clean": "rm -rf .next && rm -rf node_modules",
 		"format": "bun x biome format --write .",
