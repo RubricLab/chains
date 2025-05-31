@@ -1,6 +1,6 @@
 {
 	"scripts": {
-		"prepare": "bun x pkg prepare",
+		"prepare": "rubriclab-package prepare",
 		"bleed": "bun x npm-check-updates -u",
 		"clean": "rm -rf .next && rm -rf node_modules",
 		"format": "bun x biome format --write .",
@@ -17,7 +17,7 @@
 		"zod": "latest"
 	},
 	"simple-git-hooks": {
-		"post-commit": "bun x pkg post-commit"
+		"post-commit": "rubriclab-package post-commit"
 	},
 	"publishConfig": {
 		"access": "public"
