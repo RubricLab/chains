@@ -1,6 +1,6 @@
 {
 	"scripts": {
-		"prepare": "rm -r .git/hooks && mkdir -p .git/hooks && ln -s ../../../.git/modules/packages/chains/hooks .git/hooks && bun x simple-git-hooks",
+		"prepare": "pkg prepare",
 		"bleed": "bun x npm-check-updates -u",
 		"clean": "rm -rf .next && rm -rf node_modules",
 		"format": "bun x biome format --write .",
@@ -8,7 +8,7 @@
 		"lint:fix": "bun x biome lint . --write --unsafe"
 	},
 	"name": "@rubriclab/chains",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"main": "lib/index.ts",
 	"private": false,
 	"dependencies": {
@@ -17,7 +17,7 @@
 		"zod": "latest"
 	},
 	"simple-git-hooks": {
-		"post-commit": "bun run rubriclab-postcommit"
+		"post-commit": "pkg post-commit"
 	},
 	"publishConfig": {
 		"access": "public"
