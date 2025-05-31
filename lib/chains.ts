@@ -208,7 +208,12 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 	const __compatabilities = Object.values(compatabilities)
 		.flatMap(Object.values)
 		.reduce((acc, obj) => {
-			if (!acc.some((item: Compatabilities[keyof Compatabilities]) => item.shape === obj.shape)) {
+			if (
+				!acc.some(
+					(item: Compatabilities[keyof Compatabilities]) =>
+						JSON.stringify(item.shape) === JSON.stringify(obj.shape)
+				)
+			) {
 				acc.push(obj)
 			}
 			return acc
