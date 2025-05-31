@@ -221,8 +221,36 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 		}[keyof Compatabilities[K]]
 	}[keyof Compatabilities][]
 
+	async function drill<
+		Payload extends z.infer<z.ZodUnion<typeof __definitions>>,
+		NodeKey extends Payload['node'] extends keyof Nodes ? Payload['node'] : never
+	>(
+		payload: Payload,
+		getExec: (
+			key: NodeKey
+		) => (
+			node: z.infer<z.ZodObject<Nodes[NodeKey]['input'], $strict>>
+		) => Promise<z.infer<Nodes[NodeKey]['output']>>
+	) {
+		const drilledInputs = Object.fromEntries(
+			await Promise.all(
+				Object.entries(payload.input).map(async ([key, arg]) => {
+					if (arg instanceof Object && 'node' in arg) {
+						return [key, await drill(arg, getExec)]
+					}
+					return [key, arg]
+				})
+			)
+		) as z.infer<z.ZodObject<Nodes[NodeKey]['input'], $strict>>
+
+		return (await getExec(payload.node as NodeKey)(drilledInputs)) as z.infer<
+			Nodes[NodeKey]['output']
+		>
+	}
+
 	return {
 		definitions: __definitions,
-		compatabilities: __compatabilities
+		compatabilities: __compatabilities,
+		drill
 	}
 }
