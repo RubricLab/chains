@@ -8,7 +8,7 @@
 		"lint:fix": "bun x biome lint . --write --unsafe"
 	},
 	"name": "@rubriclab/chains",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"main": "lib/index.ts",
 	"private": false,
 	"dependencies": {
@@ -17,7 +17,7 @@
 		"zod": "latest"
 	},
 	"simple-git-hooks": {
-		"post-commit": "rubriclab-package post-commit"
+		"post-commit": "bun x @rubriclab/package post-commit"
 	},
 	"publishConfig": {
 		"access": "public"
