@@ -294,9 +294,14 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 		>
 	}
 
+	type Chain = {
+		[K in keyof Nodes]: z.infer<Definitions[K]['definition']>
+	}[keyof Nodes]
+
 	return {
 		definitions: __definitions,
 		compatabilities: __compatabilities,
-		drill
+		drill,
+		__Chain: undefined as unknown as Chain
 	}
 }
