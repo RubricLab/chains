@@ -5,6 +5,7 @@ type SupportedZodTypes =
 	| z.ZodString
 	| z.ZodNumber
 	| z.ZodBoolean
+	| z.ZodLiteral<string>
 	| z.ZodUndefined
 	| z.ZodVoid
 	| z.ZodObject<Record<string, SupportedZodTypes>>
@@ -15,21 +16,28 @@ type Node = {
 	output: SupportedZodTypes
 }
 
+type AdditionalCompatability = {
+	type: SupportedZodTypes
+	compatability: SupportedZodTypes
+}
+
 type ShapeOf<T extends SupportedZodTypes> = T extends z.ZodString
 	? 'string'
 	: T extends z.ZodNumber
 		? 'number'
 		: T extends z.ZodBoolean
 			? 'boolean'
-			: T extends z.ZodUndefined
-				? 'undefined'
-				: T extends z.ZodVoid
-					? 'void'
-					: T extends z.ZodObject<infer InnerShape extends Record<string, SupportedZodTypes>>
-						? { [K in keyof InnerShape]: ShapeOf<InnerShape[K]> }
-						: T extends z.ZodArray<infer InnerShape extends SupportedZodTypes>
-							? ShapeOf<InnerShape>[]
-							: never
+			: T extends z.ZodLiteral<infer Literal extends string>
+				? Literal
+				: T extends z.ZodUndefined
+					? 'undefined'
+					: T extends z.ZodVoid
+						? 'void'
+						: T extends z.ZodObject<infer InnerShape extends Record<string, SupportedZodTypes>>
+							? { [K in keyof InnerShape]: ShapeOf<InnerShape[K]> }
+							: T extends z.ZodArray<infer InnerShape extends SupportedZodTypes>
+								? ShapeOf<InnerShape>[]
+								: never
 
 function shapeOf<Shape extends SupportedZodTypes>(shape: Shape): ShapeOf<SupportedZodTypes> {
 	switch (shape.def.type) {
@@ -51,6 +59,9 @@ function shapeOf<Shape extends SupportedZodTypes>(shape: Shape): ShapeOf<Support
 		}
 		case 'boolean': {
 			return 'boolean' as ShapeOf<Shape>
+		}
+		case 'literal': {
+			return shape.def.values[0] as ShapeOf<Shape>
 		}
 		case 'undefined': {
 			return 'undefined' as ShapeOf<Shape>
@@ -109,17 +120,42 @@ type Definition<
 function getNodeCompatabilities<
 	Type extends SupportedZodTypes,
 	Definitions extends Record<string, Definition>
->({ type, definitions }: { type: Type; definitions: Definitions }) {
-	return Object.values(definitions)
+>({
+	type,
+	definitions,
+	additionalCompatabilities = []
+}: {
+	type: Type
+	definitions: Definitions
+	additionalCompatabilities?: AdditionalCompatability[]
+}) {
+	const nodeCompatabilities = Object.values(definitions)
 		.filter(({ output }) => {
 			return JSON.stringify(shapeOf(output)) === JSON.stringify(shapeOf(type))
 		})
 		.map(({ definition }) => definition)
+
+	const additionalSchemas = additionalCompatabilities
+		.filter(({ type: additionalType }) => {
+			return JSON.stringify(shapeOf(additionalType)) === JSON.stringify(shapeOf(type))
+		})
+		.map(({ compatability }) => compatability)
+
+	return [...nodeCompatabilities, ...additionalSchemas]
 }
 
 export function createChain<Nodes extends Record<string, Node>, Strict extends boolean = false>(
 	nodes: Nodes,
-	{ strict }: { strict: Strict } = { strict: false as Strict }
+	{
+		strict,
+		additionalCompatabilities = []
+	}: {
+		strict: Strict
+		additionalCompatabilities?: AdditionalCompatability[]
+	} = {
+		strict: false as Strict,
+		additionalCompatabilities: []
+	}
 ) {
 	function createNodeDefinition<
 		Name extends string,
@@ -178,8 +214,13 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 							{
 								shape: shapeOf(arg),
 								schema: strict
-									? z.union([...getNodeCompatabilities({ type: arg, definitions })])
-									: z.union([arg, ...getNodeCompatabilities({ type: arg, definitions })])
+									? z.union([
+											...getNodeCompatabilities({ type: arg, definitions, additionalCompatabilities })
+										])
+									: z.union([
+											arg,
+											...getNodeCompatabilities({ type: arg, definitions, additionalCompatabilities })
+										])
 							}
 						]
 					})
