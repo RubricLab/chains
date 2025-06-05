@@ -3,6 +3,15 @@
 A framework for creating recursive schemas from input/output definitions.
 Designed for complex structured output use cases with LLMs, runtime parsing of recursive objects, and compile time safety.
 
+It is part of Rubric's architecture for Generative UI when used with:
+- [@rubriclab/actions](https://github.com/rubriclab/actions)
+- [@rubriclab/blocks](https://github.com/rubriclab/blocks)
+- [@rubriclab/chains](https://github.com/rubriclab/chains)
+- [@rubriclab/agents](https://github.com/rubriclab/agents)
+- [@rubriclab/events](https://github.com/rubriclab/events)
+
+[Demo](https://chat.rubric.sh)
+
 ## Get Started
 ### Installation
 `bun add @rubriclab/chains`
