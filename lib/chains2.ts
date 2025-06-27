@@ -1,121 +1,65 @@
 import { z } from 'zod/v4'
-import type { Definition, Node, NodeCompatability, ShapeOf, SupportedZodTypes } from './types'
+import type {
+	Definition,
+	Node,
+	NodeCompatability,
+	ShapeOf,
+	SupportedZodPrimitives,
+	SupportedZodTypes
+} from './types'
 
-function shapeOf<T extends SupportedZodTypes>(type: T) {
-	type S = ShapeOf<T>
+function shapeOf<Type extends SupportedZodTypes>(type: Type): ShapeOf<Type> {
 	switch (type.def.type) {
 		case 'string': {
-			return 'string' as S
+			return 'string' as ShapeOf<Type>
 		}
 		case 'number': {
-			return 'number' as S
+			return 'number' as ShapeOf<Type>
 		}
 		case 'boolean': {
-			return 'boolean' as S
+			return 'boolean' as ShapeOf<Type>
 		}
 		case 'undefined': {
-			return 'undefined' as S
+			return 'undefined' as ShapeOf<Type>
 		}
 		case 'null': {
-			return 'null' as S
+			return 'null' as ShapeOf<Type>
 		}
 		case 'literal': {
-			return `literal(${type.def.values[0]})` as S
+			return `literal(${type.def.values[0]})` as ShapeOf<Type>
 		}
 		case 'enum': {
-			return `enum(${Object.values(type.def.entries).join(',')})` as S
+			return `enum(${Object.values(type.def.entries).join(',')})` as ShapeOf<Type>
 		}
 		case 'array': {
-			return `array(${shapeOf(type.def.element)})` as S
+			return `array(${shapeOf(type.def.element)})` as ShapeOf<Type>
 		}
 		case 'object': {
 			return `object(${Object.entries(type.def.shape)
 				.map(([key, value]) => `${key}:${shapeOf(value)}`)
-				.join(',')})` as S
+				.join(',')})` as ShapeOf<Type>
 		}
 		case 'union': {
-			return `union(${type.def.options.map(option => shapeOf(option)).join(',')})` as S
+			return `union(${type.def.options.map(option => shapeOf(option)).join(',')})` as ShapeOf<Type>
 		}
 	}
 }
 
-// Simple enums
-const Status = z.enum(['active', 'inactive', 'pending'])
-const Role = z.enum(['user', 'admin', 'guest'])
-const Color = z.enum(['red', 'blue', 'green', 'yellow'])
+// function getInnerCompatabilities(type: Exclude<SupportedZodTypes, SupportedZodPrimitives>, definitions: Record<string, Definition>) {
+// 	switch (type.def.type) {
+// 		case 'array': {
+// 			return z.array(getNodeCompatabilities({ type: type.def.element, definitions }))
+// 		}
+// 		case 'object': {
+// 			return z.object(Object.fromEntries(Object.entries(type.def.shape).map(([key, value]) => [key, getNodeCompatabilities({ type: value, definitions })])))
+// 		}
+// 		case 'union': {
+// 			return z.union(type.def.options.map(option => getNodeCompatabilities({ type: option, definitions })))
+// 		}
+// 	}
+// }
 
-const SimpleSchema = z.object({
-	// Basic primitives
-	id: z.number(),
-	name: z.string(),
-	isEnabled: z.boolean(),
-
-	// Enum
-	status: Status,
-
-	// Arrays of primitives
-	tags: z.array(z.string()),
-	scores: z.array(z.number()),
-	flags: z.array(z.boolean()),
-
-	// Union of primitives
-	value: z.union([z.string(), z.number(), z.boolean()]),
-
-	// Union with null/undefined
-	optional: z.union([z.string(), z.null(), z.undefined()]),
-
-	// Literal values
-	type: z.literal('user'),
-	version: z.union([z.literal('1'), z.literal('2'), z.literal('3')]),
-
-	// Array of enums
-	roles: z.array(Role),
-
-	// Union of arrays
-	data: z.union([z.array(z.string()), z.array(z.number())]),
-
-	// Complex union with literals
-	config: z.union([z.literal('auto'), z.literal('manual'), z.boolean(), z.number()]),
-
-	// Nested object with primitives
-	settings: z.object({
-		theme: Color,
-		count: z.number(),
-		enabled: z.boolean(),
-		items: z.array(z.string()),
-		mode: z.union([z.literal('light'), z.literal('dark'), z.null()])
-	}),
-
-	// Array of simple objects
-	entries: z.array(
-		z.object({
-			key: z.string(),
-			value: z.union([z.string(), z.number()]),
-			active: z.boolean()
-		})
-	),
-
-	// Union of different structures
-	result: z.union([
-		z.string(),
-		z.array(z.string()),
-		z.object({
-			success: z.boolean(),
-			message: z.string()
-		})
-	])
-})
-
-console.log(shapeOf(z.string()))
-console.log(shapeOf(z.number()))
-console.log(shapeOf(z.boolean()))
-console.log(shapeOf(z.undefined()))
-console.log(shapeOf(z.null()))
-console.log(shapeOf(z.literal('test')))
-console.log(shapeOf(z.enum(['test', 'test2'])))
-console.log(shapeOf(SimpleSchema))
-
-const complex = function getNodeCompatabilities<
+function getNodeCompatabilities<
 	Type extends SupportedZodTypes,
 	Definitions extends Record<string, Definition>
 >({
@@ -125,53 +69,73 @@ const complex = function getNodeCompatabilities<
 	type: Type
 	definitions: Definitions
 }) {
-	const nodeCompatabilities = Object.values(definitions)
+	return Object.values(definitions)
 		.filter(({ output }) => {
-			return JSON.stringify(shapeOf(output)) === JSON.stringify(shapeOf(type))
+			return shapeOf(output) === shapeOf(type)
 		})
 		.map(({ definition }) => definition)
+}
 
-	return nodeCompatabilities
+function createCompatabilityMap() {
+	const compatabilityMap = new Map<ShapeOf<SupportedZodTypes>, z.ZodType[]>()
+
+	return {
+		compatabilityMap,
+		upsertCompatability({ type, compatable }: { type: SupportedZodTypes; compatable: z.ZodType[] }) {
+			const shape = shapeOf(type)
+			const current = compatabilityMap.get(shape)
+
+			if (current) {
+				compatabilityMap.set(shape, [...compatable, ...current])
+			} else {
+				compatabilityMap.set(shape, compatable)
+			}
+		}
+	}
+}
+
+function createNodeDefinition<
+	Name extends string,
+	Input extends Record<string, SupportedZodTypes>
+>({
+	name,
+	input,
+	compatabilityMap
+}: {
+	name: Name
+	input: Input
+	compatabilityMap: ReturnType<typeof createCompatabilityMap>['compatabilityMap']
+}) {
+	return z.object({
+		node: z.literal(name),
+		input: z.object(
+			Object.defineProperties(
+				{},
+				Object.fromEntries(
+					Object.entries(input).map(([key, shape]) => [
+						key,
+						{
+							enumerable: true,
+							configurable: false,
+							get() {
+								return z.union(compatabilityMap.get(shapeOf(shape)) || [])
+							}
+						}
+					])
+				)
+			)
+		)
+	})
 }
 
 export function createChain<Nodes extends Record<string, Node>>(nodes: Nodes) {
-	function createNodeDefinition<
-		Name extends string,
-		Input extends Record<string, SupportedZodTypes>
-	>({
-		name,
-		input
-	}: {
-		name: Name
-		input: Input
-	}) {
-		return z.object({
-			node: z.literal(name),
-			input: z.object(
-				Object.defineProperties(
-					{},
-					Object.fromEntries(
-						Object.keys(input).map(key => [
-							key,
-							{
-								enumerable: true,
-								configurable: false,
-								get() {
-									return compatabilities[name]?.[key]?.schema
-								}
-							}
-						])
-					)
-				)
-			)
-		})
-	}
+	const { compatabilityMap, upsertCompatability } = createCompatabilityMap()
 
 	const definitions = Object.fromEntries(
 		Object.entries(nodes).map(([name, node]) => [
 			name,
 			{
-				definition: createNodeDefinition({ name, input: node.input }),
+				definition: createNodeDefinition({ name, input: node.input, compatabilityMap }),
 				output: node.output
 			}
 		])
@@ -179,29 +143,36 @@ export function createChain<Nodes extends Record<string, Node>>(nodes: Nodes) {
 		[K in keyof Nodes]: Definition<K & string, Nodes[K]['input'], Nodes>
 	}
 
-	const compatabilities = Object.fromEntries(
-		Object.entries(nodes).map(([name, node]) => {
-			return [
-				name,
-				Object.fromEntries(
-					Object.entries(node.input).map(([key, arg]) => {
-						return [
-							key,
-							{
-								shape: shapeOf(arg),
-								schema: z.union(getNodeCompatabilities({ type: arg, definitions }))
-							}
-						]
-					})
-				)
-			]
-		})
-	) as {
-		[K in keyof Nodes]: {
-			[I in keyof Nodes[K]['input']]: {
-				shape: ShapeOf<Nodes[K]['input'][I]>
-				schema: z.ZodUnion<NodeCompatability<Nodes[K]['input'][I], Nodes>>
-			}
-		}
+	// for (const [name, node] of Object.entries(nodes)) {
+	// 	for (const [key, arg] of Object.entries(node.input)) {
+	// 		const compatable = getNodeCompatabilities({ type: arg, definitions })
+	// 		console.log(
+	// 			name,
+	// 			key,
+	// 			compatable.map(c => shapeOf(c))
+	// 		)
+	// 		upsertCompatability({ type: arg, compatable })
+	// 	}
+	// }
+
+	// const t: { shape: ShapeOf<SupportedZodTypes>; schema: z.ZodType }[] = []
+
+	// compatabilityMap.forEach((schema, shape) => {
+	// 	console.log(shape)
+	// 	console.log(schema.map(s => s.def.type))
+	// 	// console.log(shape)
+	// 	// schema.map(s => {
+	// 	// 	try {
+	// 	// 		console.log(shapeOf(s))
+	// 	// 	} catch (e) {
+	// 	// 		console.log(e)
+	// 	// 	}
+	// 	// })
+	// 	t.push({ shape, schema: z.union(schema) })
+	// })
+
+	return {
+		definitions: Object.values(definitions).map(({ definition }) => definition),
+		compatabilities: t
 	}
 }

@@ -141,7 +141,39 @@ function getNodeCompatabilities<
 		})
 		.map(({ compatability }) => compatability)
 
-	return [...nodeCompatabilities, ...additionalSchemas]
+	function getInnerCompatabilities(type: Type, definitions: Definitions): Array<z.ZodType> {
+		switch (type.def.type) {
+			case 'array': {
+				console.log('is ARRAY')
+				console.log('getting inner compatabilities for array')
+				const innerCompatabilities = getNodeCompatabilities({
+					type: type.def.element,
+					definitions
+				})
+				console.log('found', innerCompatabilities.length, 'inner compatabilities')
+				return [z.array(z.union(innerCompatabilities))]
+			}
+			case 'object': {
+				const innerCompatabilities = Object.fromEntries(
+					Object.entries(type.def.shape).map(([key, shape]) => {
+						const compatabilities = getNodeCompatabilities({ type: shape, definitions })
+						return [key, z.union(compatabilities)]
+					})
+				)
+				return [z.object(innerCompatabilities)]
+			}
+				
+			default: {
+				return []
+			}
+		}
+	}
+	const innerCompatabilities = getInnerCompatabilities(type, definitions)
+	return [
+		...nodeCompatabilities,
+		...additionalSchemas,
+		...innerCompatabilities
+	]
 }
 
 export function createChain<Nodes extends Record<string, Node>, Strict extends boolean = false>(

@@ -1,7 +1,7 @@
 import type { z } from 'zod/v4'
 import type { $strict } from 'zod/v4/core'
 
-type Prev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+type Prev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export type SupportedZodPrimitives =
 	| z.ZodString
@@ -12,7 +12,7 @@ export type SupportedZodPrimitives =
 	| z.ZodLiteral<string>
 	| z.ZodEnum<Record<string, string>>
 
-export type SupportedZodTypes<Depth extends number = 20> = Depth extends 0
+export type SupportedZodTypes<Depth extends number = 10> = Depth extends 0
 	? never
 	:
 			| SupportedZodPrimitives
@@ -49,42 +49,37 @@ export type ShapeOf<T extends SupportedZodTypes> = T extends z.ZodString
 										? ShapeOf<Union[number]>
 										: never
 
-type Compatable<
-	Type1 extends SupportedZodTypes,
-	Type2 extends SupportedZodTypes
-> = ShapeOf<Type1> extends ShapeOf<Type2> ? true : false
+type IsCompatible<
+	Out extends SupportedZodTypes,
+	In extends SupportedZodTypes
+> = ShapeOf<Out> extends ShapeOf<In> ? true : false
 
 export type NodeCompatability<
-	Type extends SupportedZodTypes,
-	Nodes extends Record<string, Node>
+	FieldType extends SupportedZodTypes,
+	AllNodes extends Record<string, Node>,
+	Strict extends boolean
 > = {
-	[K in keyof Nodes]: Compatable<Nodes[K]['output'], Type> extends true
-		? NodeDefinition<K & string, Nodes[K]['input'], Nodes>
+	[K in keyof AllNodes]: IsCompatible<AllNodes[K]['output'], FieldType> extends true
+		? NodeDefinition<K & string, AllNodes[K]['input'], AllNodes, Strict>
 		: never
-}[keyof Nodes][]
+}[keyof AllNodes][]
 
-type NodeDefinition<
+export type NodeDefinition<
 	Name extends string,
 	Input extends Record<string, SupportedZodTypes>,
-	Nodes extends Record<string, Node>
+	Nodes extends Record<string, Node>,
+	Strict extends boolean
 > = z.ZodObject<
 	{
 		node: z.ZodLiteral<Name>
 		input: z.ZodObject<
 			{
-				[K in keyof Input]: z.ZodUnion<NodeCompatability<Input[K], Nodes>>
+				[K in keyof Input]: Strict extends true
+					? z.ZodUnion<NodeCompatability<Input[K], Nodes, Strict>>
+					: z.ZodUnion<[Input[K], ...NodeCompatability<Input[K], Nodes, Strict>]>
 			},
 			$strict
 		>
 	},
 	$strict
 >
-
-export type Definition<
-	Name extends string = string,
-	Input extends Record<string, SupportedZodTypes> = Record<string, SupportedZodTypes>,
-	Nodes extends Record<string, Node> = Record<string, Node>
-> = {
-	definition: NodeDefinition<Name, Input, Nodes>
-	output: SupportedZodTypes
-}
