@@ -1,30 +1,34 @@
 import type { z } from 'zod/v4'
 import type { $strict } from 'zod/v4/core'
 
-type Prev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+type DepthMap = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-export type SupportedZodPrimitives =
-	| z.ZodString
-	| z.ZodNumber
-	| z.ZodBoolean
-	| z.ZodUndefined
-	| z.ZodNull
-	| z.ZodLiteral<string>
-	| z.ZodEnum<Record<string, string>>
+type MAX_DEPTH = 10
 
-export type SupportedZodTypes<Depth extends number = 10> = Depth extends 0
+type $SupportedZodTypes<Depth extends number = MAX_DEPTH> = Depth extends 0
 	? never
 	:
-			| SupportedZodPrimitives
-			| z.ZodObject<Record<string, SupportedZodTypes<Prev[Depth]>>>
-			| z.ZodArray<SupportedZodTypes<Prev[Depth]>>
-			| z.ZodUnion<readonly SupportedZodTypes<Prev[Depth]>[]>
+			| z.ZodString
+			| z.ZodNumber
+			| z.ZodBoolean
+			| z.ZodUndefined
+			| z.ZodNull
+			| z.ZodLiteral<string>
+			| z.ZodEnum<Record<string, string>>
+			| z.ZodObject<Record<string, $SupportedZodTypes>>
+			| z.ZodArray<$SupportedZodTypes>
+			| z.ZodUnion<readonly $SupportedZodTypes<DepthMap[Depth]>[]>
 
-export type SupportedZodCompoundTypes = Exclude<SupportedZodTypes, SupportedZodPrimitives>
+export type SupportedZodTypes = $SupportedZodTypes
 
 export type Node = {
 	input: Record<string, SupportedZodTypes>
 	output: SupportedZodTypes
+}
+
+export type AdditionalCompatability = {
+	type: SupportedZodTypes
+	compatibilities: SupportedZodTypes[]
 }
 
 export type ShapeOf<T extends SupportedZodTypes> = T extends z.ZodString
@@ -45,7 +49,7 @@ export type ShapeOf<T extends SupportedZodTypes> = T extends z.ZodString
 								? { [K in keyof InnerShape]: ShapeOf<InnerShape[K]> }
 								: T extends z.ZodArray<infer InnerShape extends SupportedZodTypes>
 									? ShapeOf<InnerShape>[]
-									: T extends z.ZodUnion<infer Union extends SupportedZodTypes[]>
+									: T extends z.ZodUnion<infer Union extends readonly SupportedZodTypes[]>
 										? ShapeOf<Union[number]>
 										: never
 
@@ -54,15 +58,43 @@ type IsCompatible<
 	In extends SupportedZodTypes
 > = ShapeOf<Out> extends ShapeOf<In> ? true : false
 
-export type NodeCompatability<
-	FieldType extends SupportedZodTypes,
-	AllNodes extends Record<string, Node>,
+export type Compatibilities<
+	Type extends SupportedZodTypes,
+	Nodes extends Record<string, Node>,
+	Strict extends boolean
+> = Strict extends true
+	? z.ZodUnion<
+			[...NodeCompatibilities<Type, Nodes, Strict>, ...InnerCompatibilities<Type, Nodes, Strict>]
+		>
+	: z.ZodUnion<
+			[Type, ...NodeCompatibilities<Type, Nodes, Strict>, ...InnerCompatibilities<Type, Nodes, Strict>]
+		>
+
+export type NodeCompatibilities<
+	Type extends SupportedZodTypes,
+	Nodes extends Record<string, Node>,
 	Strict extends boolean
 > = {
-	[K in keyof AllNodes]: IsCompatible<AllNodes[K]['output'], FieldType> extends true
-		? NodeDefinition<K & string, AllNodes[K]['input'], AllNodes, Strict>
+	[K in keyof Nodes]: IsCompatible<Nodes[K]['output'], Type> extends true
+		? NodeDefinition<K & string, Nodes[K]['input'], Nodes, Strict>
 		: never
-}[keyof AllNodes][]
+}[keyof Nodes][]
+
+export type InnerCompatibilities<
+	Type extends SupportedZodTypes,
+	Nodes extends Record<string, Node>,
+	Strict extends boolean
+> = Type extends z.ZodArray<infer Element extends SupportedZodTypes>
+	? [z.ZodArray<Compatibilities<Element, Nodes, Strict>>]
+	: Type extends z.ZodObject<infer Fields extends Record<string, SupportedZodTypes>>
+		? [z.ZodObject<{ [K in keyof Fields]: Compatibilities<Fields[K], Nodes, Strict> }>]
+		: Type extends z.ZodUnion<infer Options extends readonly SupportedZodTypes[]>
+			? [
+					z.ZodUnion<{
+						[I in keyof Options]: Compatibilities<Options[I], Nodes, Strict>
+					}>
+				]
+			: []
 
 export type NodeDefinition<
 	Name extends string,
@@ -74,9 +106,7 @@ export type NodeDefinition<
 		node: z.ZodLiteral<Name>
 		input: z.ZodObject<
 			{
-				[K in keyof Input]: Strict extends true
-					? z.ZodUnion<NodeCompatability<Input[K], Nodes, Strict>>
-					: z.ZodUnion<[Input[K], ...NodeCompatability<Input[K], Nodes, Strict>]>
+				[K in keyof Input]: Compatibilities<Input[K], Nodes, Strict>
 			},
 			$strict
 		>

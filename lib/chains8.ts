@@ -1,5 +1,5 @@
 import { z } from 'zod/v4'
-import type { Node, NodeCompatability, NodeDefinition, SupportedZodTypes } from './types2'
+import type { Node, NodeDefinition, SupportedZodTypes } from './types2'
 
 function shapeOf<Type extends SupportedZodTypes>(type: Type) {
 	switch (type.def.type) {
@@ -50,6 +50,7 @@ export function createChain<
 ) {
 	const strict = config?.strict || false
 	const additionalCompatabilities = config?.additionalCompatabilities || []
+
 	function createDefinition<Name extends string, Input extends Node['input']>({
 		name,
 		input
@@ -76,17 +77,17 @@ export function createChain<
 				output
 			}
 		])
-	) as unknown as {
+	) as {
 		[K in keyof Nodes]: {
 			definition: NodeDefinition<K & string, Nodes[K]['input'], Nodes, Strict>
 			output: Nodes[K]['output']
 		}
 	}
 
-	const compatibilities: Record<string, SupportedZodTypes> = {}
+	const compatibilities: Record<string, SupportedZodTypes | z.ZodLazy<SupportedZodTypes>> = {}
 
 	function getCompatible<Type extends SupportedZodTypes>(type: Type) {
-		return compatibilities[shapeOf(type)] as z.ZodUnion<NodeCompatability<Type, Nodes, Strict>>
+		return compatibilities[shapeOf(type)]
 	}
 
 	function getAdditionalCompatabilities(type: SupportedZodTypes) {
@@ -133,7 +134,7 @@ export function createChain<
 	}
 
 	function walk(type: SupportedZodTypes) {
-		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type)) as unknown as SupportedZodTypes
+		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type))
 
 		if (type instanceof z.ZodArray) walk(type.def.element)
 		if (type instanceof z.ZodObject) for (const field of Object.values(type.def.shape)) walk(field)
@@ -197,50 +198,40 @@ const test = createChain(
 		},
 		log: {
 			input: {
-				text: z.object({
-					value: z.union([z.string(), z.number()]),
-					thing: z.union([z.string(), z.number()])
-				})
+				thing: z.array(
+					z.array(
+						z.array(
+							z.array(
+								z.array(
+									z.array(
+										z.array(
+											z.array(
+												z.array(
+													z.array(
+														z.array(
+															z.array(z.array(z.array(z.array(z.array(z.array(z.array(z.array(z.string()))))))))
+														)
+													)
+												)
+											)
+										)
+									)
+								)
+							)
+						)
+					)
+				)
 			},
-			output: z.undefined()
+			output: z.string()
 		}
 	},
 	{
-		strict: false,
-		additionalCompatabilities: [{ type: z.string(), compatibiliies: [z.string()] }]
-	}
-)
-
-const t: z.infer<typeof test.definitions.add.definition> = {
-	node: 'add',
-	input: {
-		number1: {
-			node: 'parseInt',
-			input: {
-				string: '3'
+		strict: true,
+		additionalCompatabilities: [
+			{
+				type: z.number(),
+				compatibiliies: [z.literal('NUMBERINPUT')]
 			}
-		},
-		number2: 2
-	}
-}
-
-console.log(test.definitions.log.definition.parse(t))
-
-const registry = z.registry<{ id: string }>()
-
-Object.values(test.definitions).map(d => {
-	d.definition.register(registry, { id: d.definition.def.shape.node.def.values[0] })
-})
-
-Object.entries(test.compatibilities).map(([k, v]) => {
-	v.register(registry, { id: k })
-})
-
-console.dir(
-	z.toJSONSchema(z.union(Object.values(test.definitions).map(({ definition }) => definition)), {
-		metadata: registry
-	}),
-	{
-		depth: null
+		]
 	}
 )
