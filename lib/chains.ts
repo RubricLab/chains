@@ -1,7 +1,7 @@
 import { z } from 'zod/v4'
 import type { CustomCompatibility, Node, NodeDefinition, SupportedZodTypes } from './types'
 
-function shapeOf<Type extends SupportedZodTypes>(type: Type) {
+function shapeOf<Type extends SupportedZodTypes>(type: Type): string {
 	switch (type.def.type) {
 		case 'string': {
 			return 'string'
@@ -71,25 +71,15 @@ export function createChain<
 	}
 
 	const definitions = Object.fromEntries(
-		Object.entries(nodes).map(([name, { input, output }]) => [
-			name,
-			{
-				definition: createDefinition({ name, input }),
-				output
-			}
-		])
+		Object.entries(nodes).map(([name, { input }]) => [name, createDefinition({ name, input })])
 	) as {
-		[K in keyof Nodes]: {
-			// NodeDefinition generic type handles the entire compile time workload
-			definition: NodeDefinition<
-				K & string,
-				Nodes[K]['input'],
-				Nodes,
-				Strict,
-				AdditionalCompatibilities
-			>
-			output: Nodes[K]['output']
-		}
+		[K in keyof Nodes]: NodeDefinition<
+			K & string,
+			Nodes[K]['input'],
+			Nodes,
+			Strict,
+			AdditionalCompatibilities
+		>
 	}
 
 	/* --------- COMPATIBILITIES --------- */
@@ -97,7 +87,7 @@ export function createChain<
 	const compatibilities: Record<string, SupportedZodTypes | z.ZodLazy<SupportedZodTypes>> = {}
 
 	function getCompatible<Type extends SupportedZodTypes>(type: Type) {
-		return compatibilities[shapeOf(type)]
+		return compatibilities[shapeOf(type)] ?? z.never()
 	}
 
 	function getAdditionalCompatibilities(type: SupportedZodTypes) {
@@ -109,9 +99,9 @@ export function createChain<
 	}
 
 	function getCompatibleDefinitions(type: SupportedZodTypes) {
-		return Object.values(definitions)
-			.filter(({ output }) => shapeOf(output) === shapeOf(type))
-			.map(({ definition }) => definition)
+		return Object.entries(nodes)
+			.filter(([_, { output }]) => shapeOf(output) === shapeOf(type))
+			.map(([key]) => definitions[key])
 	}
 
 	function getInnerCompatabilities(type: SupportedZodTypes) {
@@ -135,7 +125,7 @@ export function createChain<
 			...getInnerCompatabilities(type),
 			...getAdditionalCompatibilities(type),
 			...(strict ? [] : [type])
-		]
+		] as [SupportedZodTypes, ...SupportedZodTypes[]]
 
 		if (branches.length === 0) throw `No node produces shape "${shapeOf(type)}".`
 		if (branches.length === 1) return branches[0]
@@ -201,7 +191,7 @@ const test = createChain(
 	}
 )
 
-const t: z.infer<typeof test.definitions.add.definition> = {
+const t: z.infer<typeof test.definitions.add> = {
 	node: 'add',
 	input: {
 		number1: {
@@ -213,3 +203,5 @@ const t: z.infer<typeof test.definitions.add.definition> = {
 		number2: 'N'
 	}
 }
+
+console.log(test.definitions.add.parse(t))

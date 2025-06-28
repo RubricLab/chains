@@ -1,3 +1,4 @@
+- [2025-06-28] [cleanup](https://github.com/RubricLab/chains/commit/b1790b9d23ed8f0a496c0c876ce5b1a4276a763f)
 - [2025-06-28] [cleanup](https://github.com/RubricLab/chains/commit/8bde6ace18c52231d0a429ddf6ca906b8516f3ef)
 - [2025-06-28] [lfg](https://github.com/RubricLab/chains/commit/1418f4e4f389411dbe8d82cf1eaf7f06f2cc70d0)
 - [2025-06-27] [stash](https://github.com/RubricLab/chains/commit/56cc506e4eaf9d53415c11d1ad092207871be247)
