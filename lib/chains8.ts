@@ -1,5 +1,5 @@
 import { z } from 'zod/v4'
-import type { Node, NodeDefinition, SupportedZodTypes } from './types2'
+import type { CustomCompatibility, Node, NodeDefinition, SupportedZodTypes } from './types2'
 
 function shapeOf<Type extends SupportedZodTypes>(type: Type) {
 	switch (type.def.type) {
@@ -38,18 +38,18 @@ function shapeOf<Type extends SupportedZodTypes>(type: Type) {
 	}
 }
 
-type AdditionalCompatability = { type: SupportedZodTypes; compatibiliies: SupportedZodTypes[] }
-
 export function createChain<
 	Nodes extends Record<string, Node>,
-	Strict extends boolean = false,
-	AdditionalCompatabilities extends AdditionalCompatability[] = []
+	Strict extends boolean,
+	AdditionalCompatibilities extends CustomCompatibility[]
 >(
 	nodes: Nodes,
-	config?: { strict?: Strict; additionalCompatabilities?: AdditionalCompatabilities }
+	config?: { strict?: Strict; additionalCompatibilities?: AdditionalCompatibilities }
 ) {
 	const strict = config?.strict || false
-	const additionalCompatabilities = config?.additionalCompatabilities || []
+	const additionalCompatibilities = config?.additionalCompatibilities || []
+
+	/* --------- CREATE DEFINITIONS --------- */
 
 	function createDefinition<Name extends string, Input extends Node['input']>({
 		name,
@@ -57,6 +57,7 @@ export function createChain<
 	}: { name: Name; input: Input }) {
 		return z.strictObject({
 			node: z.literal(name),
+			// Make input lazy
 			get input() {
 				return z.strictObject(
 					Object.fromEntries(
@@ -79,10 +80,19 @@ export function createChain<
 		])
 	) as {
 		[K in keyof Nodes]: {
-			definition: NodeDefinition<K & string, Nodes[K]['input'], Nodes, Strict>
+			// NodeDefinition generic type handles the entire compile time workload
+			definition: NodeDefinition<
+				K & string,
+				Nodes[K]['input'],
+				Nodes,
+				Strict,
+				AdditionalCompatibilities
+			>
 			output: Nodes[K]['output']
 		}
 	}
+
+	/* --------- COMPATIBILITIES --------- */
 
 	const compatibilities: Record<string, SupportedZodTypes | z.ZodLazy<SupportedZodTypes>> = {}
 
@@ -90,11 +100,11 @@ export function createChain<
 		return compatibilities[shapeOf(type)]
 	}
 
-	function getAdditionalCompatabilities(type: SupportedZodTypes) {
+	function getAdditionalCompatibilities(type: SupportedZodTypes) {
 		return (
-			additionalCompatabilities.find(
+			additionalCompatibilities.find(
 				additionalCompatability => shapeOf(additionalCompatability.type) === shapeOf(type)
-			)?.compatibiliies || []
+			)?.compatibilities || []
 		)
 	}
 
@@ -123,7 +133,7 @@ export function createChain<
 		const branches = [
 			...getCompatibleDefinitions(type),
 			...getInnerCompatabilities(type),
-			...getAdditionalCompatabilities(type),
+			...getAdditionalCompatibilities(type),
 			...(strict ? [] : [type])
 		]
 
@@ -132,6 +142,8 @@ export function createChain<
 
 		return z.union(branches)
 	}
+
+	/* --------- DISCOVER ALL TYPES --------- */
 
 	function walk(type: SupportedZodTypes) {
 		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type))
@@ -161,10 +173,9 @@ const test = createChain(
 			},
 			output: z.number()
 		},
-		subtract: {
+		parseInt: {
 			input: {
-				number1: z.number(),
-				number2: z.number()
+				string: z.string()
 			},
 			output: z.number()
 		},
@@ -173,65 +184,32 @@ const test = createChain(
 				number: z.number()
 			},
 			output: z.string()
-		},
-		concatenate: {
-			input: {
-				strings: z.array(z.string())
-			},
-			output: z.string()
-		},
-		split: {
-			input: {
-				string: z.string()
-			},
-			output: z.array(z.string())
-		},
-		parseInt: {
-			input: {
-				string: z.string()
-			},
-			output: z.number()
-		},
-		produceString: {
-			input: {},
-			output: z.string()
-		},
-		log: {
-			input: {
-				thing: z.array(
-					z.array(
-						z.array(
-							z.array(
-								z.array(
-									z.array(
-										z.array(
-											z.array(
-												z.array(
-													z.array(
-														z.array(
-															z.array(z.array(z.array(z.array(z.array(z.array(z.array(z.array(z.string()))))))))
-														)
-													)
-												)
-											)
-										)
-									)
-								)
-							)
-						)
-					)
-				)
-			},
-			output: z.string()
 		}
 	},
 	{
 		strict: true,
-		additionalCompatabilities: [
+		additionalCompatibilities: [
 			{
 				type: z.number(),
-				compatibiliies: [z.literal('NUMBERINPUT')]
+				compatibilities: [z.literal('N')]
+			},
+			{
+				type: z.string(),
+				compatibilities: [z.literal('STRING')]
 			}
 		]
 	}
 )
+
+const t: z.infer<typeof test.definitions.add.definition> = {
+	node: 'add',
+	input: {
+		number1: {
+			node: 'parseInt',
+			input: {
+				string: 'STRING'
+			}
+		},
+		number2: 'N'
+	}
+}
