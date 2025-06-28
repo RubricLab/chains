@@ -1,339 +1,215 @@
 import { z } from 'zod/v4'
-import type { $strict } from 'zod/v4/core'
+import type { CustomCompatibility, Node, NodeDefinition, SupportedZodTypes } from './types'
 
-type SupportedZodTypes =
-	| z.ZodString
-	| z.ZodNumber
-	| z.ZodBoolean
-	| z.ZodLiteral<string>
-	| z.ZodUndefined
-	| z.ZodVoid
-	| z.ZodObject<Record<string, SupportedZodTypes>>
-	| z.ZodArray<SupportedZodTypes>
-
-type Node = {
-	input: Record<string, SupportedZodTypes>
-	output: SupportedZodTypes
-}
-
-type AdditionalCompatability = {
-	type: SupportedZodTypes
-	compatability: SupportedZodTypes
-}
-
-type ShapeOf<T extends SupportedZodTypes> = T extends z.ZodString
-	? 'string'
-	: T extends z.ZodNumber
-		? 'number'
-		: T extends z.ZodBoolean
-			? 'boolean'
-			: T extends z.ZodLiteral<infer Literal extends string>
-				? Literal
-				: T extends z.ZodUndefined
-					? 'undefined'
-					: T extends z.ZodVoid
-						? 'void'
-						: T extends z.ZodObject<infer InnerShape extends Record<string, SupportedZodTypes>>
-							? { [K in keyof InnerShape]: ShapeOf<InnerShape[K]> }
-							: T extends z.ZodArray<infer InnerShape extends SupportedZodTypes>
-								? ShapeOf<InnerShape>[]
-								: never
-
-function shapeOf<Shape extends SupportedZodTypes>(shape: Shape): ShapeOf<SupportedZodTypes> {
-	switch (shape.def.type) {
-		case 'object': {
-			return Object.fromEntries(
-				Object.entries(shape.def.shape).map(([key, value]) => {
-					return [key, shapeOf(value)]
-				})
-			) as ShapeOf<Shape>
-		}
-		case 'array': {
-			return [shapeOf(shape.def.element)] as ShapeOf<Shape>
+function shapeOf<Type extends SupportedZodTypes>(type: Type) {
+	switch (type.def.type) {
+		case 'string': {
+			return 'string'
 		}
 		case 'number': {
-			return 'number' as ShapeOf<Shape>
-		}
-		case 'string': {
-			return 'string' as ShapeOf<Shape>
+			return 'number'
 		}
 		case 'boolean': {
-			return 'boolean' as ShapeOf<Shape>
-		}
-		case 'literal': {
-			return shape.def.values[0] as ShapeOf<Shape>
+			return 'boolean'
 		}
 		case 'undefined': {
-			return 'undefined' as ShapeOf<Shape>
+			return 'undefined'
 		}
-		case 'void': {
-			return 'void' as ShapeOf<Shape>
+		case 'null': {
+			return 'null'
 		}
-	}
-}
-
-type Compatable<
-	Type1 extends SupportedZodTypes,
-	Type2 extends SupportedZodTypes
-> = ShapeOf<Type1> extends ShapeOf<Type2> ? true : false
-
-type NodeCompatability<
-	Type extends SupportedZodTypes,
-	Nodes extends Record<string, Node>,
-	Strict extends boolean
-> = {
-	[K in keyof Nodes]: Compatable<Nodes[K]['output'], Type> extends true
-		? NodeDefinition<K & string, Nodes[K]['input'], Nodes, Strict>
-		: never
-}[keyof Nodes][]
-
-type NodeDefinition<
-	Name extends string,
-	Input extends Record<string, SupportedZodTypes>,
-	Nodes extends Record<string, Node>,
-	Strict extends boolean
-> = z.ZodObject<
-	{
-		node: z.ZodLiteral<Name>
-		input: z.ZodObject<
-			{
-				[K in keyof Input]: Strict extends true
-					? z.ZodUnion<NodeCompatability<Input[K], Nodes, Strict>>
-					: z.ZodUnion<[Input[K], ...NodeCompatability<Input[K], Nodes, Strict>]>
-			},
-			$strict
-		>
-	},
-	$strict
->
-
-type Definition<
-	Name extends string = string,
-	Input extends Record<string, SupportedZodTypes> = Record<string, SupportedZodTypes>,
-	Nodes extends Record<string, Node> = Record<string, Node>,
-	Strict extends boolean = boolean
-> = {
-	definition: NodeDefinition<Name, Input, Nodes, Strict>
-	output: SupportedZodTypes
-}
-
-function getNodeCompatabilities<
-	Type extends SupportedZodTypes,
-	Definitions extends Record<string, Definition>
->({
-	type,
-	definitions,
-	additionalCompatabilities = []
-}: {
-	type: Type
-	definitions: Definitions
-	additionalCompatabilities?: AdditionalCompatability[]
-}) {
-	const nodeCompatabilities = Object.values(definitions)
-		.filter(({ output }) => {
-			return JSON.stringify(shapeOf(output)) === JSON.stringify(shapeOf(type))
-		})
-		.map(({ definition }) => definition)
-
-	const additionalSchemas = additionalCompatabilities
-		.filter(({ type: additionalType }) => {
-			return JSON.stringify(shapeOf(additionalType)) === JSON.stringify(shapeOf(type))
-		})
-		.map(({ compatability }) => compatability)
-
-	function getInnerCompatabilities(type: Type, definitions: Definitions): Array<z.ZodType> {
-		switch (type.def.type) {
-			case 'array': {
-				console.log('is ARRAY')
-				console.log('getting inner compatabilities for array')
-				const innerCompatabilities = getNodeCompatabilities({
-					type: type.def.element,
-					definitions
-				})
-				console.log('found', innerCompatabilities.length, 'inner compatabilities')
-				return [z.array(z.union(innerCompatabilities))]
-			}
-			case 'object': {
-				const innerCompatabilities = Object.fromEntries(
-					Object.entries(type.def.shape).map(([key, shape]) => {
-						const compatabilities = getNodeCompatabilities({ type: shape, definitions })
-						return [key, z.union(compatabilities)]
-					})
-				)
-				return [z.object(innerCompatabilities)]
-			}
-				
-			default: {
-				return []
-			}
+		case 'literal': {
+			return `literal(${type.def.values[0]})`
+		}
+		case 'enum': {
+			return `enum(${Object.values(type.def.entries).join(',')})`
+		}
+		case 'array': {
+			return `array(${shapeOf(type.def.element)})`
+		}
+		case 'object': {
+			return `object(${Object.entries(type.def.shape)
+				.map(([key, value]) => `${key}:${shapeOf(value)}`)
+				.join(',')})`
+		}
+		case 'union': {
+			return `union(${type.def.options.map(option => shapeOf(option)).join(',')})`
 		}
 	}
-	const innerCompatabilities = getInnerCompatabilities(type, definitions)
-	return [
-		...nodeCompatabilities,
-		...additionalSchemas,
-		...innerCompatabilities
-	]
 }
 
-export function createChain<Nodes extends Record<string, Node>, Strict extends boolean = false>(
+export function createChain<
+	Nodes extends Record<string, Node>,
+	Strict extends boolean,
+	AdditionalCompatibilities extends CustomCompatibility[]
+>(
 	nodes: Nodes,
-	{
-		strict,
-		additionalCompatabilities = []
-	}: {
-		strict: Strict
-		additionalCompatabilities?: AdditionalCompatability[]
-	} = {
-		strict: false as Strict,
-		additionalCompatabilities: []
-	}
+	config?: { strict?: Strict; additionalCompatibilities?: AdditionalCompatibilities }
 ) {
-	function createNodeDefinition<
-		Name extends string,
-		Input extends Record<string, SupportedZodTypes>
-	>({
+	const strict = config?.strict || false
+	const additionalCompatibilities = config?.additionalCompatibilities || []
+
+	/* --------- CREATE DEFINITIONS --------- */
+
+	function createDefinition<Name extends string, Input extends Node['input']>({
 		name,
 		input
-	}: {
-		name: Name
-		input: Input
-	}) {
-		return z.object({
+	}: { name: Name; input: Input }) {
+		return z.strictObject({
 			node: z.literal(name),
-			input: z.object(
-				Object.defineProperties(
-					{},
+			// Make input lazy
+			get input() {
+				return z.strictObject(
 					Object.fromEntries(
-						Object.keys(input).map(key => [
-							key,
-							{
-								enumerable: true,
-								configurable: false,
-								get() {
-									return compatabilities[name]?.[key]?.schema
-								}
-							}
-						])
+						Object.entries(input).map(([key, type]) => {
+							return [key, getCompatible(type)]
+						})
 					)
 				)
-			)
+			}
 		})
 	}
 
-	// Internal, recursive
 	const definitions = Object.fromEntries(
-		Object.entries(nodes).map(([name, node]) => [
+		Object.entries(nodes).map(([name, { input, output }]) => [
 			name,
 			{
-				definition: createNodeDefinition({ name, input: node.input }),
-				output: node.output
+				definition: createDefinition({ name, input }),
+				output
 			}
 		])
 	) as {
-		[K in keyof Nodes]: Definition<K & string, Nodes[K]['input'], Nodes, Strict>
-	}
-
-	// Internal, recursive
-	const compatabilities = Object.fromEntries(
-		Object.entries(nodes).map(([name, node]) => {
-			return [
-				name,
-				Object.fromEntries(
-					Object.entries(node.input).map(([key, arg]) => {
-						return [
-							key,
-							{
-								shape: shapeOf(arg),
-								schema: strict
-									? z.union([
-											...getNodeCompatabilities({ type: arg, definitions, additionalCompatabilities })
-										])
-									: z.union([
-											arg,
-											...getNodeCompatabilities({ type: arg, definitions, additionalCompatabilities })
-										])
-							}
-						]
-					})
-				)
-			]
-		})
-	) as {
 		[K in keyof Nodes]: {
-			[I in keyof Nodes[K]['input']]: {
-				shape: ShapeOf<Nodes[K]['input'][I]>
-				schema: Strict extends true
-					? z.ZodUnion<NodeCompatability<Nodes[K]['input'][I], Nodes, Strict>>
-					: z.ZodUnion<[Nodes[K]['input'][I], ...NodeCompatability<Nodes[K]['input'][I], Nodes, Strict>]>
-			}
+			// NodeDefinition generic type handles the entire compile time workload
+			definition: NodeDefinition<
+				K & string,
+				Nodes[K]['input'],
+				Nodes,
+				Strict,
+				AdditionalCompatibilities
+			>
+			output: Nodes[K]['output']
 		}
 	}
 
-	type Definitions = typeof definitions
+	/* --------- COMPATIBILITIES --------- */
 
-	type Compatabilities = typeof compatabilities
+	const compatibilities: Record<string, SupportedZodTypes | z.ZodLazy<SupportedZodTypes>> = {}
 
-	const __definitions = Object.values(definitions).map(({ definition }) => definition) as {
-		[K in keyof Definitions]: Definitions[K]['definition']
-	}[keyof Definitions][]
-
-	const __compatabilities = Object.values(compatabilities)
-		.flatMap(Object.values)
-		.reduce((acc, obj) => {
-			if (
-				!acc.some(
-					(item: Compatabilities[keyof Compatabilities]) =>
-						JSON.stringify(item.shape) === JSON.stringify(obj.shape)
-				)
-			) {
-				acc.push(obj)
-			}
-			return acc
-		}, []) as {
-		[K in keyof Compatabilities]: {
-			[J in keyof Compatabilities[K]]: {
-				shape: Compatabilities[K][J]['shape']
-				schema: Compatabilities[K][J]['schema']
-			}
-		}[keyof Compatabilities[K]]
-	}[keyof Compatabilities][]
-
-	async function drill<
-		Payload extends z.infer<z.ZodUnion<typeof __definitions>>,
-		NodeKey extends Payload['node'] extends keyof Nodes ? Payload['node'] : never
-	>(
-		payload: Payload,
-		getExec: (
-			key: NodeKey
-		) => (
-			node: z.infer<z.ZodObject<Nodes[NodeKey]['input'], $strict>>
-		) => Promise<z.infer<Nodes[NodeKey]['output']>>
-	) {
-		const drilledInputs = Object.fromEntries(
-			await Promise.all(
-				Object.entries(payload.input).map(async ([key, arg]) => {
-					if (arg instanceof Object && 'node' in arg) {
-						return [key, await drill(arg, getExec)]
-					}
-					return [key, arg]
-				})
-			)
-		) as z.infer<z.ZodObject<Nodes[NodeKey]['input'], $strict>>
-
-		return (await getExec(payload.node as NodeKey)(drilledInputs)) as z.infer<
-			Nodes[NodeKey]['output']
-		>
+	function getCompatible<Type extends SupportedZodTypes>(type: Type) {
+		return compatibilities[shapeOf(type)]
 	}
 
-	type Chain = {
-		[K in keyof Nodes]: z.infer<Definitions[K]['definition']>
-	}[keyof Nodes]
+	function getAdditionalCompatibilities(type: SupportedZodTypes) {
+		return (
+			additionalCompatibilities.find(
+				additionalCompatability => shapeOf(additionalCompatability.type) === shapeOf(type)
+			)?.compatibilities || []
+		)
+	}
+
+	function getCompatibleDefinitions(type: SupportedZodTypes) {
+		return Object.values(definitions)
+			.filter(({ output }) => shapeOf(output) === shapeOf(type))
+			.map(({ definition }) => definition)
+	}
+
+	function getInnerCompatabilities(type: SupportedZodTypes) {
+		if (type.def.type === 'array') return [z.array(getCompatible(type.def.element))]
+		if (type.def.type === 'object')
+			return [
+				z.strictObject(
+					Object.fromEntries(
+						Object.entries(type.def.shape).map(([key, field]) => [key, getCompatible(field)])
+					)
+				)
+			]
+
+		if (type.def.type === 'union') return [z.union(type.def.options.map(getCompatible))]
+		return []
+	}
+
+	function getSchema(type: SupportedZodTypes) {
+		const branches = [
+			...getCompatibleDefinitions(type),
+			...getInnerCompatabilities(type),
+			...getAdditionalCompatibilities(type),
+			...(strict ? [] : [type])
+		]
+
+		if (branches.length === 0) throw `No node produces shape "${shapeOf(type)}".`
+		if (branches.length === 1) return branches[0]
+
+		return z.union(branches)
+	}
+
+	/* --------- DISCOVER ALL TYPES --------- */
+
+	function walk(type: SupportedZodTypes) {
+		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type))
+
+		if (type instanceof z.ZodArray) walk(type.def.element)
+		if (type instanceof z.ZodObject) for (const field of Object.values(type.def.shape)) walk(field)
+		if (type instanceof z.ZodUnion) for (const option of type.def.options) walk(option)
+	}
+
+	for (const { input, output } of Object.values(nodes)) {
+		walk(output)
+		for (const field of Object.values(input)) walk(field)
+	}
 
 	return {
-		definitions: __definitions,
-		compatabilities: __compatabilities,
-		drill,
-		__Chain: undefined as unknown as Chain
+		definitions,
+		compatibilities
+	}
+}
+
+const test = createChain(
+	{
+		add: {
+			input: {
+				number1: z.number(),
+				number2: z.number()
+			},
+			output: z.number()
+		},
+		parseInt: {
+			input: {
+				string: z.string()
+			},
+			output: z.number()
+		},
+		stringify: {
+			input: {
+				number: z.number()
+			},
+			output: z.string()
+		}
+	},
+	{
+		strict: true,
+		additionalCompatibilities: [
+			{
+				type: z.number(),
+				compatibilities: [z.literal('N')]
+			},
+			{
+				type: z.string(),
+				compatibilities: [z.literal('STRING')]
+			}
+		]
+	}
+)
+
+const t: z.infer<typeof test.definitions.add.definition> = {
+	node: 'add',
+	input: {
+		number1: {
+			node: 'parseInt',
+			input: {
+				string: 'STRING'
+			}
+		},
+		number2: 'N'
 	}
 }
