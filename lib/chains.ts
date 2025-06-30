@@ -73,6 +73,7 @@ export function createChain<
 	const definitions = Object.fromEntries(
 		Object.entries(nodes).map(([name, { input }]) => [name, createDefinition({ name, input })])
 	) as {
+		// All the typesafety happens here.
 		[K in keyof Nodes]: NodeDefinition<
 			K & string,
 			Nodes[K]['input'],
@@ -153,55 +154,3 @@ export function createChain<
 		compatibilities
 	}
 }
-
-const test = createChain(
-	{
-		add: {
-			input: {
-				number1: z.number(),
-				number2: z.number()
-			},
-			output: z.number()
-		},
-		parseInt: {
-			input: {
-				string: z.string()
-			},
-			output: z.number()
-		},
-		stringify: {
-			input: {
-				number: z.number()
-			},
-			output: z.string()
-		}
-	},
-	{
-		strict: true,
-		additionalCompatibilities: [
-			{
-				type: z.number(),
-				compatibilities: [z.literal('N')]
-			},
-			{
-				type: z.string(),
-				compatibilities: [z.literal('STRING')]
-			}
-		]
-	}
-)
-
-const t: z.infer<typeof test.definitions.add> = {
-	node: 'add',
-	input: {
-		number1: {
-			node: 'parseInt',
-			input: {
-				string: 'STRING'
-			}
-		},
-		number2: 'N'
-	}
-}
-
-console.log(test.definitions.add.parse(t))
