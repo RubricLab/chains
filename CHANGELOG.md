@@ -1,3 +1,4 @@
+- [2025-07-01] [run format](https://github.com/RubricLab/chains/commit/5d8213cafda5bb089f0875b70057bfb8a4ff94f0)
 - [2025-07-01] [consolidate biome format script](https://github.com/RubricLab/chains/commit/65bb3dcaffc236bc83fcc3a544ef8f13cb4fe938)
 - [2025-06-30] [support simpler node def - input and output just zod](https://github.com/RubricLab/chains/commit/f45b2e484cba2c18f5508b2bb523111fc617ce30)
 - [2025-06-30] [cleanup](https://github.com/RubricLab/chains/commit/5a5c9eb49f0e6a703fb9332a768b4fd481209cca)

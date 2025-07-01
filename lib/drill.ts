@@ -1,12 +1,12 @@
 import type { z } from 'zod/v4'
 import type { Node } from './types'
 
-
 export function createDrill<Nodes extends Record<string, Node>>(_nodes: Nodes) {
-
 	async function drill(
 		payload: unknown,
-		getExecutor: <Key extends keyof Nodes>(key: Key) => (input: z.infer<Nodes[Key]['input']>) => Promise<z.infer<Nodes[Key]['output']>>
+		getExecutor: <Key extends keyof Nodes>(
+			key: Key
+		) => (input: z.infer<Nodes[Key]['input']>) => Promise<z.infer<Nodes[Key]['output']>>
 	): Promise<unknown> {
 		if (Array.isArray(payload)) {
 			return await Promise.all(payload.map(async element => await drill(element, getExecutor)))
