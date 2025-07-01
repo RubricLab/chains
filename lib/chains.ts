@@ -51,7 +51,7 @@ export function createChain<
 
 	/* --------- CREATE DEFINITIONS --------- */
 
-	function createDefinition<Name extends string, Input extends Node['input']>({
+	function createDefinition<Name extends string, Input extends SupportedZodTypes>({
 		name,
 		input
 	}: { name: Name; input: Input }) {
@@ -59,19 +59,13 @@ export function createChain<
 			node: z.literal(name),
 			// Make input lazy
 			get input() {
-				return z.strictObject(
-					Object.fromEntries(
-						Object.entries(input).map(([key, type]) => {
-							return [key, getCompatible(type)]
-						})
-					)
-				)
+				return getCompatible(input)
 			}
 		})
 	}
 
 	const definitions = Object.fromEntries(
-		Object.entries(nodes).map(([name, { input }]) => [name, createDefinition({ name, input })])
+		Object.entries(nodes).map(([name, {input }]) => [name, createDefinition({ name, input })])
 	) as {
 		// All the typesafety happens here.
 		[K in keyof Nodes]: NodeDefinition<
@@ -101,7 +95,7 @@ export function createChain<
 
 	function getCompatibleDefinitions(type: SupportedZodTypes) {
 		return Object.entries(nodes)
-			.filter(([_, { output }]) => shapeOf(output) === shapeOf(type))
+			.filter(([_,  {output}]) => shapeOf(output) === shapeOf(type))
 			.map(([key]) => definitions[key])
 	}
 
@@ -145,12 +139,12 @@ export function createChain<
 	}
 
 	for (const { input, output } of Object.values(nodes)) {
+		walk(input)
 		walk(output)
-		for (const field of Object.values(input)) walk(field)
 	}
 
 	return {
 		definitions,
-		compatibilities
+		compatibilities,
 	}
 }

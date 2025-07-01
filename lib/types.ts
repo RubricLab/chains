@@ -25,7 +25,7 @@ export type $SupportedZodTypes<Depth extends number = MAX_DEPTH> = Depth extends
 export type SupportedZodTypes = $SupportedZodTypes
 
 export type Node = {
-	input: Record<string, SupportedZodTypes>
+	input: SupportedZodTypes
 	output: SupportedZodTypes
 }
 
@@ -126,19 +126,14 @@ export type Compatibilities<
 
 export type NodeDefinition<
 	Name extends string,
-	Input extends Record<string, SupportedZodTypes>,
+	Input extends SupportedZodTypes,
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
 	AdditionalCompatabilities extends CustomCompatibility[]
 > = z.ZodObject<
 	{
 		node: z.ZodLiteral<Name>
-		input: z.ZodObject<
-			{
-				[K in keyof Input]: Compatibilities<Input[K], Nodes, Strict, AdditionalCompatabilities>
-			},
-			$strict
-		>
+		input: Compatibilities<Input, Nodes, Strict, AdditionalCompatabilities>
 	},
 	$strict
 >
