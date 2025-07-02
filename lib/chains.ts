@@ -58,12 +58,13 @@ export function createChain<
 		name: Name
 		input: Input
 	}) {
+		// biome-ignore assist/source/useSortedKeys: node first is more intuitive
 		return z.strictObject({
 			// Make input lazy
+			node: z.literal(name),
 			get input() {
 				return getCompatible(input)
-			},
-			node: z.literal(name)
+			}
 		})
 	}
 
