@@ -83,7 +83,7 @@ export function createChain<
 
 	/* --------- COMPATIBILITIES --------- */
 
-	const compatibilities: Record<string, SupportedZodTypes | z.ZodLazy<SupportedZodTypes>> = {}
+	const compatibilities: Record<string, z.ZodLazy<SupportedZodTypes> | SupportedZodTypes> = {}
 
 	function getCompatible<Type extends SupportedZodTypes>(type: Type) {
 		return compatibilities[shapeOf(type)] ?? z.never()
@@ -135,7 +135,9 @@ export function createChain<
 	/* --------- DISCOVER ALL TYPES --------- */
 
 	function walk(type: SupportedZodTypes) {
-		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type))
+		compatibilities[shapeOf(type)] = z.lazy<SupportedZodTypes>(
+			() => getSchema(type) as SupportedZodTypes
+		)
 
 		if (type instanceof z.ZodArray) walk(type.def.element)
 		if (type instanceof z.ZodObject) for (const field of Object.values(type.def.shape)) walk(field)

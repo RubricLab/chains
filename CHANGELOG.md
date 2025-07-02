@@ -1,3 +1,4 @@
+- [2025-07-02] [fix build 2](https://github.com/RubricLab/chains/commit/4e57a0bbadbc99f520613b7ab3b13ed0693e52d3)
 - [2025-07-02] [trying to fix build](https://github.com/RubricLab/chains/commit/a3a9482990998e977b32e8d15ad5c52e5f94a952)
 - [2025-07-02] [sort node -> input](https://github.com/RubricLab/chains/commit/1b335982393de06085f099d03f2fcef95fba66c1)
 - [2025-07-01] [add depth limit to all recursive types](https://github.com/RubricLab/chains/commit/b4f2664110ddb0b27b2657e2bb1a0e716d34a4f7)
