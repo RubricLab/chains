@@ -135,7 +135,7 @@ export function createChain<
 	/* --------- DISCOVER ALL TYPES --------- */
 
 	function walk(type: SupportedZodTypes) {
-		compatibilities[shapeOf(type)] = z.lazy<SupportedZodTypes>(() => getSchema(type))
+		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type))
 
 		if (type instanceof z.ZodArray) walk(type.def.element)
 		if (type instanceof z.ZodObject) for (const field of Object.values(type.def.shape)) walk(field)
