@@ -4,36 +4,36 @@ import type { CustomCompatibility, Node, NodeDefinition, SupportedZodTypes } fro
 function shapeOf<Type extends SupportedZodTypes>(type: Type): string {
 	switch (type.def.type) {
 		case 'string': {
-			return 'string'
+			return '_string'
 		}
 		case 'number': {
-			return 'number'
+			return '_number'
 		}
 		case 'boolean': {
-			return 'boolean'
+			return '_boolean'
 		}
 		case 'undefined': {
-			return 'undefined'
+			return '_undefined'
 		}
 		case 'null': {
-			return 'null'
+			return '_null'
 		}
 		case 'literal': {
-			return `literal(${type.def.values[0]})`
+			return `_literal(${type.def.values[0]})`
 		}
 		case 'enum': {
-			return `enum(${Object.values(type.def.entries).join(',')})`
+			return `_enum(${Object.values(type.def.entries).join(',')})`
 		}
 		case 'array': {
-			return `array(${shapeOf(type.def.element)})`
+			return `_array(${shapeOf(type.def.element)})`
 		}
 		case 'object': {
-			return `object(${Object.entries(type.def.shape)
+			return `_object(${Object.entries(type.def.shape)
 				.map(([key, value]) => `${key}:${shapeOf(value)}`)
 				.join(',')})`
 		}
 		case 'union': {
-			return `union(${type.def.options.map(option => shapeOf(option)).join(',')})`
+			return `_union(${type.def.options.map(option => shapeOf(option)).join(',')})`
 		}
 	}
 }
