@@ -1,8 +1,10 @@
 import { z } from 'zod/v4'
 import type { CustomCompatibility, Node, NodeDefinition, SupportedZodTypes } from './types'
 
-function shapeOf<Type extends SupportedZodTypes>(type: Type): string {
-	switch (type.def.type) {
+function shapeOf(schema: z.core.$ZodType): string {
+	const def = (schema as SupportedZodTypes)._zod.def
+
+	switch (def.type) {
 		case 'string': {
 			return '_string'
 		}
@@ -19,21 +21,24 @@ function shapeOf<Type extends SupportedZodTypes>(type: Type): string {
 			return '_null'
 		}
 		case 'literal': {
-			return `_literal(${type.def.values[0]})`
+			return `_literal(${def.values[0]})`
 		}
 		case 'enum': {
-			return `_enum(${Object.values(type.def.entries).join(',')})`
+			return `_enum(${Object.values(def.entries).join(',')})`
 		}
 		case 'array': {
-			return `_array(${shapeOf(type.def.element)})`
+			return `_array(${shapeOf(def.element)})`
 		}
 		case 'object': {
-			return `_object(${Object.entries(type.def.shape)
+			return `_object(${Object.entries(def.shape)
 				.map(([key, value]) => `${key}:${shapeOf(value)}`)
 				.join(',')})`
 		}
 		case 'union': {
-			return `_union(${type.def.options.map(option => shapeOf(option)).join(',')})`
+			return `_union(${def.options.map(option => shapeOf(option)).join(',')})`
+		}
+		default: {
+			throw ''
 		}
 	}
 }
@@ -44,7 +49,10 @@ export function createChain<
 	AdditionalCompatibilities extends CustomCompatibility[]
 >(
 	nodes: Nodes,
-	config?: { strict?: Strict; additionalCompatibilities?: AdditionalCompatibilities }
+	config?: {
+		strict?: Strict
+		additionalCompatibilities?: AdditionalCompatibilities
+	}
 ) {
 	const strict = config?.strict || false
 	const additionalCompatibilities = config?.additionalCompatibilities || []
@@ -83,13 +91,13 @@ export function createChain<
 
 	/* --------- COMPATIBILITIES --------- */
 
-	const compatibilities: Record<string, z.ZodLazy<SupportedZodTypes> | SupportedZodTypes> = {}
+	const compatibilities: Record<string, z.ZodType> = {}
 
-	function getCompatible<Type extends SupportedZodTypes>(type: Type) {
+	function getCompatible<Type extends z.core.$ZodType>(type: Type) {
 		return compatibilities[shapeOf(type)] ?? z.never()
 	}
 
-	function getAdditionalCompatibilities(type: SupportedZodTypes) {
+	function getAdditionalCompatibilities(type: z.core.$ZodType) {
 		return (
 			additionalCompatibilities.find(
 				additionalCompatability => shapeOf(additionalCompatability.type) === shapeOf(type)
@@ -97,28 +105,32 @@ export function createChain<
 		)
 	}
 
-	function getCompatibleDefinitions(type: SupportedZodTypes) {
+	function getCompatibleDefinitions(type: z.core.$ZodType) {
 		return Object.entries(nodes)
 			.filter(([_, { output }]) => shapeOf(output) === shapeOf(type))
 			.map(([key]) => definitions[key])
 	}
 
-	function getInnerCompatabilities(type: SupportedZodTypes) {
-		if (type.def.type === 'array') return [z.array(getCompatible(type.def.element))]
-		if (type.def.type === 'object')
+	function getInnerCompatabilities(type: z.core.$ZodType) {
+		const {
+			_zod: { def }
+		} = type as z.core.$ZodTypes
+
+		if (def.type === 'array') return [z.array(getCompatible(def.element))]
+		if (def.type === 'object')
 			return [
 				z.strictObject(
 					Object.fromEntries(
-						Object.entries(type.def.shape).map(([key, field]) => [key, getCompatible(field)])
+						Object.entries(def.shape).map(([key, field]) => [key, getCompatible(field)])
 					)
 				)
 			]
 
-		if (type.def.type === 'union') return [z.union(type.def.options.map(getCompatible))]
+		if (def.type === 'union') return [z.union(def.options.map(getCompatible))]
 		return []
 	}
 
-	function getSchema(type: SupportedZodTypes) {
+	function getSchema(type: z.core.$ZodType) {
 		const branches = [
 			...getCompatibleDefinitions(type),
 			...getInnerCompatabilities(type),
@@ -134,8 +146,8 @@ export function createChain<
 
 	/* --------- DISCOVER ALL TYPES --------- */
 
-	function walk(type: SupportedZodTypes) {
-		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type) as SupportedZodTypes)
+	function walk(type: z.core.$ZodType) {
+		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type))
 
 		if (type instanceof z.ZodArray) walk(type.def.element)
 		if (type instanceof z.ZodObject) for (const field of Object.values(type.def.shape)) walk(field)
