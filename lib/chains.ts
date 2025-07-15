@@ -1,166 +1,266 @@
-import { z } from 'zod/v4'
-import type { CustomCompatibility, Node, NodeDefinition, SupportedZodTypes } from './types'
+import { z } from "zod/v4";
+import type {
+	Custom,
+	CustomCompatibility,
+	Node,
+	NodeDefinition,
+	Scope,
+	SupportedZodTypes,
+} from "./types";
 
-function shapeOf(schema: z.core.$ZodType): string {
-	const def = (schema as SupportedZodTypes)._zod.def
+declare module "zod/v4/core" {
+	interface $ZodTypeDef {
+		brand?: string;
+		scope?: Scope;
+	}
+	interface $ZodCustomDef {
+		token: string;
+	}
+}
 
-	switch (def.type) {
-		case 'string': {
-			return '_string'
-		}
-		case 'number': {
-			return '_number'
-		}
-		case 'boolean': {
-			return '_boolean'
-		}
-		case 'undefined': {
-			return '_undefined'
-		}
-		case 'null': {
-			return '_null'
-		}
-		case 'literal': {
-			return `_literal(${def.values[0]})`
-		}
-		case 'enum': {
-			return `_enum(${Object.values(def.entries).join(',')})`
-		}
-		case 'array': {
-			return `_array(${shapeOf(def.element)})`
-		}
-		case 'object': {
-			return `_object(${Object.entries(def.shape)
-				.map(([key, value]) => `${key}:${shapeOf(value)}`)
-				.join(',')})`
-		}
-		case 'union': {
-			return `_union(${def.options.map(option => shapeOf(option)).join(',')})`
-		}
-		default: {
-			throw ''
+export function createBrand<BrandName extends string>(brandName: BrandName) {
+	return function brand<Type extends z.ZodType>(type: Type) {
+		type._zod.def.brand = brandName;
+		return type.brand<BrandName>();
+	};
+}
+
+export function createCustom<Type, Token extends string>(token: Token) {
+	const custom = z.custom<Type>();
+	custom._zod.def.token = token;
+	return custom as Custom<Type, Token>;
+}
+
+export function scoped<Type extends z.core.$ZodTypes>(
+	type: Type,
+	scope: Scope,
+) {
+	return new z.core.$ZodType({ ...type._zod.def, scope }) as Type;
+}
+
+export function shapeOf(schema: z.core.$ZodType, scope?: Scope): string {
+	const def = (schema as SupportedZodTypes)._zod.def;
+
+	function getShape() {
+		switch (def.type) {
+			case "string": {
+				return "_string";
+			}
+			case "number": {
+				return "_number";
+			}
+			case "boolean": {
+				return "_boolean";
+			}
+			case "undefined": {
+				return "_undefined";
+			}
+			case "null": {
+				return "_null";
+			}
+			case "literal": {
+				return `_literal(${def.values[0]})`;
+			}
+			case "enum": {
+				return `_enum(${Object.values(def.entries).join(",")})`;
+			}
+			case "array": {
+				return `_array(${shapeOf(def.element, scope)})`;
+			}
+			case "tuple": {
+				return `_tuple(${def.items.map((item) => shapeOf(item, scope)).join(",")})`;
+			}
+			case "object": {
+				return `_object(${Object.entries(def.shape)
+					.map(([key, value]) => `${key}:${shapeOf(value, scope)}`)
+					.join(",")})`;
+			}
+			case "union": {
+				return `_union(${def.options.map((option) => shapeOf(option, scope)).join(",")})`;
+			}
+			case "custom": {
+				return `_custom(${def.token})`;
+			}
+			default: {
+				throw `${def.type} not supported`;
+			}
 		}
 	}
+
+	if (scope) {
+		return `_scoped(${scope.name},${getShape()})`;
+	}
+	if (def.brand) {
+		return `_branded(${def.brand},${getShape()})`;
+	}
+	return getShape();
 }
 
 export function createChain<
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
-	AdditionalCompatibilities extends CustomCompatibility[]
+	AdditionalCompatibilities extends CustomCompatibility[],
 >(
 	nodes: Nodes,
 	config?: {
-		strict?: Strict
-		additionalCompatibilities?: AdditionalCompatibilities
-	}
+		strict?: Strict;
+		additionalCompatibilities?: AdditionalCompatibilities;
+	},
 ) {
-	const strict = config?.strict || false
-	const additionalCompatibilities = config?.additionalCompatibilities || []
+	const strict = config?.strict || false;
+	const additionalCompatibilities = config?.additionalCompatibilities || [];
 
-	/* --------- CREATE DEFINITIONS --------- */
+	const compatibilities: Record<string, z.ZodType> = {};
 
-	function createDefinition<Name extends string, Input extends SupportedZodTypes>({
-		name,
-		input
-	}: {
-		name: Name
-		input: Input
-	}) {
-		// biome-ignore assist/source/useSortedKeys: node first is more intuitive
-		return z.strictObject({
-			// Make input lazy
-			node: z.literal(name),
-			get input() {
-				return getCompatible(input)
-			}
-		})
+	function getCompatible<Type extends z.core.$ZodType>(
+		type: Type,
+		scope?: Scope,
+	) {
+		scope ??= type._zod.def.scope; // keep current scope
+		const key = shapeOf(type, scope);
+
+		if (!compatibilities[key]) walk(type, scope);
+
+		return compatibilities[key] ?? z.never();
 	}
 
-	const definitions = Object.fromEntries(
-		Object.entries(nodes).map(([name, { input }]) => [name, createDefinition({ input, name })])
-	) as {
-		// All the typesafety happens here.
-		[K in keyof Nodes]: NodeDefinition<
-			K & string,
-			Nodes[K]['input'],
-			Nodes,
-			Strict,
-			AdditionalCompatibilities
-		>
-	}
-
-	/* --------- COMPATIBILITIES --------- */
-
-	const compatibilities: Record<string, z.ZodType> = {}
-
-	function getCompatible<Type extends z.core.$ZodType>(type: Type) {
-		return compatibilities[shapeOf(type)] ?? z.never()
-	}
-
-	function getAdditionalCompatibilities(type: z.core.$ZodType) {
+	function getAdditionalCompatibilities(type: z.core.$ZodType, scope?: Scope) {
 		return (
 			additionalCompatibilities.find(
-				additionalCompatability => shapeOf(additionalCompatability.type) === shapeOf(type)
+				(ac) => shapeOf(ac.type, scope) === shapeOf(type, scope),
 			)?.compatibilities || []
-		)
+		);
 	}
 
-	function getCompatibleDefinitions(type: z.core.$ZodType) {
+	const allDefinitions: Record<string, z.ZodTypeAny> = {}; // new map
+
+	function makeDefinitionForScope<
+		Name extends string,
+		Input extends SupportedZodTypes,
+	>(opts: { name: Name; input: Input }, scope?: Scope) {
+		const id = scope ? `${opts.name}@${scope.name}` : opts.name; // stable key
+		if (allDefinitions[id]) return allDefinitions[id]; // memoised
+
+		const schema = z.lazy(() => {
+			const compatible = getCompatible(opts.input, scope);
+			return z.strictObject({
+				node: z.literal(opts.name),
+				...(compatible instanceof z.ZodNever ? {} : { input: compatible }),
+			});
+		});
+
+		allDefinitions[id] = schema;
+		return schema as z.ZodLazy<
+			NodeDefinition<Name, Input, Nodes, Strict, AdditionalCompatibilities>
+		>;
+	}
+
+	const rootDefinitions = Object.fromEntries(
+		Object.entries(nodes).map(([name, { input }]) => [
+			name,
+			makeDefinitionForScope({ name, input }), // no scope
+		]),
+	) as {
+		[K in keyof Nodes]: z.ZodLazy<
+			NodeDefinition<
+				K & string,
+				Nodes[K]["input"],
+				Nodes,
+				Strict,
+				AdditionalCompatibilities
+			>
+		>;
+	};
+
+	function getCompatibleDefinitions(type: z.core.$ZodType, scope?: Scope) {
 		return Object.entries(nodes)
-			.filter(([_, { output }]) => shapeOf(output) === shapeOf(type))
-			.map(([key]) => definitions[key])
+			.filter(
+				([, { output }]) => shapeOf(output, scope) === shapeOf(type, scope),
+			)
+			.map(([name, { input }]) =>
+				scope
+					? makeDefinitionForScope({ name, input }, scope)
+					: rootDefinitions[name],
+			);
 	}
 
-	function getInnerCompatabilities(type: z.core.$ZodType) {
+	function getInnerCompatabilities(type: z.core.$ZodType, scope?: Scope) {
 		const {
-			_zod: { def }
-		} = type as z.core.$ZodTypes
+			_zod: { def },
+		} = type as z.core.$ZodTypes;
 
-		if (def.type === 'array') return [z.array(getCompatible(def.element))]
-		if (def.type === 'object')
+		if (def.type === "array")
+			return [z.array(getCompatible(def.element, scope))];
+		if (def.type === "object")
 			return [
 				z.strictObject(
 					Object.fromEntries(
-						Object.entries(def.shape).map(([key, field]) => [key, getCompatible(field)])
-					)
-				)
-			]
+						Object.entries(def.shape).map(([key, field]) => [
+							key,
+							getCompatible(field, scope),
+						]),
+					),
+				),
+			];
 
-		if (def.type === 'union') return [z.union(def.options.map(getCompatible))]
-		return []
+		if (def.type === "union")
+			return [
+				z.union(def.options.map((option) => getCompatible(option, scope))),
+			];
+		return [];
 	}
 
-	function getSchema(type: z.core.$ZodType) {
+	function getContextCompatibilities(type: z.core.$ZodType, scope?: Scope) {
+		if (!scope) return [];
+
+		const wantedShape = shapeOf(type);
+		return Object.entries(scope.context ?? {})
+			.filter(([, tokenType]) => shapeOf(tokenType) === wantedShape)
+			.map(([token]) => z.literal(token));
+	}
+
+	function getSchema(type: z.core.$ZodType, scope?: Scope) {
 		const branches = [
-			...getCompatibleDefinitions(type),
-			...getInnerCompatabilities(type),
-			...getAdditionalCompatibilities(type),
-			...(strict ? [] : [type])
-		] as [SupportedZodTypes, ...SupportedZodTypes[]]
+			...getCompatibleDefinitions(type, scope),
+			...getInnerCompatabilities(type, scope),
+			...getAdditionalCompatibilities(type, scope),
+			...getContextCompatibilities(type, scope),
 
-		if (branches.length === 0) throw `No node produces shape "${shapeOf(type)}".`
-		if (branches.length === 1) return branches[0]
+			...(strict ? [] : [type]),
+		] as [SupportedZodTypes, ...SupportedZodTypes[]];
 
-		return z.union(branches)
+		if (branches.length === 0)
+			throw `No node produces shape "${shapeOf(type)}".`;
+		if (branches.length === 1) return branches[0];
+
+		return z.union(branches);
 	}
 
-	/* --------- DISCOVER ALL TYPES --------- */
+	function walk(type: z.core.$ZodType, scope?: Scope) {
+		scope = scope ?? type._zod.def.scope;
 
-	function walk(type: z.core.$ZodType) {
-		compatibilities[shapeOf(type)] = z.lazy(() => getSchema(type))
+		const key = shapeOf(type, scope);
+		if (compatibilities[key]) return;
 
-		if (type instanceof z.ZodArray) walk(type.def.element)
-		if (type instanceof z.ZodObject) for (const field of Object.values(type.def.shape)) walk(field)
-		if (type instanceof z.ZodUnion) for (const option of type.def.options) walk(option)
+		compatibilities[key] = z.lazy(() => getSchema(type, scope));
+		getCompatibleDefinitions(type, scope);
+		getInnerCompatabilities(type, scope);
+		getContextCompatibilities(type, scope);
+
+		if (type instanceof z.ZodArray) walk(type.def.element, scope);
+		if (type instanceof z.ZodObject)
+			for (const f of Object.values(type.def.shape)) walk(f, scope);
+		if (type instanceof z.ZodUnion)
+			for (const o of type.def.options) walk(o, scope);
 	}
 
 	for (const { input, output } of Object.values(nodes)) {
-		walk(input)
-		walk(output)
+		walk(input);
+		walk(output);
 	}
 
 	return {
-		compatibilities,
-		definitions
-	}
+		compatibilities: { ...compatibilities, ...allDefinitions },
+		definitions: rootDefinitions,
+	};
 }
