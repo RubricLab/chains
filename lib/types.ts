@@ -23,6 +23,7 @@ export type Scope = {
 	name: string;
 	context?: Record<string, z.ZodType>;
 };
+
 export type Scoped<Type, S extends Scope> = Type & { scope: S };
 
 export type ShapeOf<T extends SupportedZodTypes> = T extends z.core.$ZodBranded<

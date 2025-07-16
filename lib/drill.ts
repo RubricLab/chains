@@ -1,5 +1,5 @@
 import type { z } from 'zod/v4'
-import type { Node } from './types'
+import type { Node } from '../lib2/types'
 
 export function createDrill<Nodes extends Record<string, Node>>(_nodes: Nodes) {
 	async function drill(

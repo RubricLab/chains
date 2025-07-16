@@ -1,3 +1,5 @@
+- [2025-07-16] [stash](https://github.com/RubricLab/chains/commit/97ab1280dc25a973a2dc3450b7c83df0eecc22d8)
+- [2025-07-16] [stash](https://github.com/RubricLab/chains/commit/9087c853356569705418ca453583df1e86d9886a)
 - [2025-07-14] [stash](https://github.com/RubricLab/chains/commit/9a551168d5205fc902a64b0faaeb782cb7a3fc54)
 - [2025-07-13] [speed up compile time, remove recursive caps](https://github.com/RubricLab/chains/commit/21f9f02d60f5f8c770a622a5dffe920763f416dd)
 - [2025-07-11] [prefix custom type hashes to avoid buggy S/O inference](https://github.com/RubricLab/chains/commit/fb031d3fed199711d42f17b92df7efda82f9b701)
