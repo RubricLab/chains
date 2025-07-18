@@ -8,15 +8,15 @@ import type {
 	SupportedZodTypes
 } from './types'
 
-// declare module "zod/v4/core" {
-// 	interface $ZodTypeDef {
-// 		brand?: string;
-// 		scope?: Scope;
-// 	}
-// 	interface $ZodCustomDef {
-// 		token: string;
-// 	}
-// }
+declare module 'zod/v4/core' {
+	interface $ZodTypeDef {
+		brand?: string
+		scope?: Scope
+	}
+	interface $ZodCustomDef {
+		token: string
+	}
+}
 
 function isEffectivelyNever(
 	schema: z.core.$ZodType,
@@ -125,8 +125,8 @@ export function createChain<
 
 	const compatibilities: Record<string, z.ZodType> = {}
 
-	function getCompatible<Type extends z.core.$ZodType>(type: Type, scope?: Scope) {
-		scope ??= type._zod.def.scope // keep current scope
+	function getCompatible<Type extends z.core.$ZodType>(type: Type, _scope?: Scope) {
+		const scope = _scope ?? type._zod.def.scope // keep current scope
 		const key = shapeOf(type, scope)
 
 		if (!compatibilities[key]) walk(type, scope)
@@ -236,8 +236,8 @@ export function createChain<
 		return z.union(branches.filter(b => !isEffectivelyNever(b)))
 	}
 
-	function walk(type: z.core.$ZodType, scope?: Scope) {
-		scope = scope ?? type._zod.def.scope
+	function walk(type: z.core.$ZodType, _scope?: Scope) {
+		const scope = _scope ?? type._zod.def.scope
 
 		const key = shapeOf(type, scope)
 		if (compatibilities[key]) return

@@ -1,3 +1,4 @@
+- [2025-07-17] [scoped, branded, custom major build](https://github.com/RubricLab/chains/commit/d2c1f59ed25ccd7e42c1bf809d6ac7beb3f9543f)
 - [2025-07-16] [stash](https://github.com/RubricLab/chains/commit/97ab1280dc25a973a2dc3450b7c83df0eecc22d8)
 - [2025-07-16] [stash](https://github.com/RubricLab/chains/commit/9087c853356569705418ca453583df1e86d9886a)
 - [2025-07-14] [stash](https://github.com/RubricLab/chains/commit/9a551168d5205fc902a64b0faaeb782cb7a3fc54)

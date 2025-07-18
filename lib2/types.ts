@@ -118,11 +118,16 @@ type $InnerCompatibilities<
 				]
 			: []
 
-type $ContextCompatibilities<Type extends $ZodType, Context extends Record<string, $ZodType>> = [
-	{
-		[K in keyof Context]: ShapeOf<Context[K]> extends ShapeOf<Type> ? z.ZodLiteral<K & string> : never
-	}[keyof Context][][number]
-]
+type $ContextCompatibilities<
+	Type extends $ZodType,
+	Context extends Record<string, $ZodType> | undefined
+> = Context extends Record<string, $ZodType>
+	? {
+			[K in keyof Context]: ShapeOf<Context[K]> extends ShapeOf<Type>
+				? z.ZodLiteral<K & string>
+				: never
+		}[keyof Context][]
+	: []
 
 type $StrictCompatibilities<Type extends $ZodType, Strict extends boolean> = Type extends Branded<
 	infer _Inner,
@@ -141,22 +146,14 @@ export type $Compatibilities<
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
 	Context extends Record<string, $ZodType> | undefined
-> = Context extends Record<string, $ZodType>
-	? z.ZodUnion<
-			[
-				...$ContextCompatibilities<Type, Context>,
-				...$NodeCompatibilities<Type, Nodes, Strict, Context>,
-				...$InnerCompatibilities<Type, Nodes, Strict, Context>,
-				...$StrictCompatibilities<Type, Strict>
-			]
-		>
-	: z.ZodUnion<
-			[
-				...$NodeCompatibilities<Type, Nodes, Strict, undefined>,
-				...$InnerCompatibilities<Type, Nodes, Strict, undefined>,
-				...$StrictCompatibilities<Type, Strict>
-			]
-		>
+> = z.ZodUnion<
+	[
+		...$ContextCompatibilities<Type, Context>,
+		...$NodeCompatibilities<Type, Nodes, Strict, Context>,
+		...$InnerCompatibilities<Type, Nodes, Strict, Context>,
+		...$StrictCompatibilities<Type, Strict>
+	]
+>
 
 export type Compatibilities<
 	Type extends $ZodType,

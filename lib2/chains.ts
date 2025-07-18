@@ -31,12 +31,14 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 	}
 
 	function createDefinition({ name, scope }: { name: keyof Nodes & string; scope?: Scope }) {
-		definitions[scope ? `scoped(${scope.name},${name})` : name] = z.strictObject({
-			get input() {
-				return getCompatible((nodes[name] ?? (undefined as never)).input, scope)
-			},
-			node: z.literal(name)
-		})
+		definitions[scope ? `scoped(${scope.name},${name})` : name] =
+			// biome-ignore assist/source/useSortedKeys: node first is more intuitive
+			z.strictObject({
+				node: z.literal(name),
+				get input() {
+					return getCompatible((nodes[name] ?? (undefined as never)).input, scope)
+				}
+			})
 
 		// warm
 		getCompatible((nodes[name] ?? (undefined as never)).input, scope)
@@ -97,9 +99,9 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 		return z.union(branches)
 	}
 
-	function walk(type: $ZodType, scope?: Scope) {
+	function walk(type: $ZodType, _scope?: Scope) {
 		const def = (type as $ZodTypes)._zod.def
-		scope = scope ?? def.scope
+		const scope = _scope ?? def.scope
 
 		compatibilities[shapeOf(type, scope)] = z.lazy(() => getSchema(type, scope))
 
