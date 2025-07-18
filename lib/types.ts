@@ -1,166 +1,102 @@
-import type { z } from "zod/v4";
-import type { $strict } from "zod/v4/core";
+import type { Branded, Node, Scoped, ShapeOf } from '@rubriclab/shapes'
+import type { ZodObject, z } from 'zod/v4'
+import type { $strict, $ZodLiteral, $ZodObject, $ZodType } from 'zod/v4/core'
 
-/* --------- CORE --------- */
-
-export type SupportedZodTypes = z.core.$ZodTypes;
-
-export type Node = {
-	input: SupportedZodTypes;
-	output: SupportedZodTypes;
-};
-
-export type CustomCompatibility = {
-	type: SupportedZodTypes;
-	compatibilities: SupportedZodTypes[];
-};
-
-export type Custom<Type, Token extends string> = z.ZodCustom<Type, Type> & {
-	token: Token;
-};
-
-export type Scope = {
-	name: string;
-	context?: Record<string, z.ZodType>;
-};
-
-export type Scoped<Type, S extends Scope> = Type & { scope: S };
-
-export type ShapeOf<T extends SupportedZodTypes> = T extends z.core.$ZodBranded<
-	infer Inner extends SupportedZodTypes,
-	infer Brand
->
-	? [Brand, ShapeOf<Inner>]
-	: T extends z.core.$ZodString
-		? "string"
-		: T extends z.core.$ZodNumber
-			? "number"
-			: T extends z.core.$ZodBoolean
-				? "boolean"
-				: T extends z.core.$ZodUndefined
-					? "undefined"
-					: T extends z.core.$ZodNull
-						? "null"
-						: T extends z.core.$ZodLiteral<infer Literal extends string>
-							? Literal
-							: T extends z.core.$ZodEnum<
-										infer Enum extends Record<string, string>
-									>
-								? Enum[keyof Enum]
-								: T extends z.core.$ZodObject<
-											infer Inner extends Record<string, SupportedZodTypes>
-										>
-									? { [K in keyof Inner]: ShapeOf<Inner[K]> }
-									: T extends z.core.$ZodArray<
-												infer Inner extends SupportedZodTypes
-											>
-										? ShapeOf<Inner>[]
-										: T extends z.core.$ZodUnion<
-													infer Union extends readonly SupportedZodTypes[]
-												>
-											? ShapeOf<Union[number]>
-											: T extends Custom<infer _Inner, infer Token>
-												? Token
-												: never;
-
-type IsCompatible<
-	Out extends SupportedZodTypes,
-	In extends SupportedZodTypes,
-> = ShapeOf<Out> extends ShapeOf<In> ? true : false;
-
-/* --------- COMPATABILITIES --------- */
+export type IsCompatible<
+	Out extends $ZodType,
+	In extends $ZodType
+> = ShapeOf<Out> extends ShapeOf<In> ? true : false
 
 type $NodeCompatibilities<
-	Type extends SupportedZodTypes,
+	Type extends $ZodType,
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
-	CustomCompatabilities extends CustomCompatibility[],
+	Context extends Record<string, $ZodType> | undefined
 > = {
-	[K in keyof Nodes]: IsCompatible<Nodes[K]["output"], Type> extends true
-		? NodeDefinition<
-				K & string,
-				Nodes[K]["input"],
-				Nodes,
-				Strict,
-				CustomCompatabilities
-			>
-		: never;
-}[keyof Nodes][];
+	[K in keyof Nodes]: IsCompatible<Nodes[K]['output'], Type> extends true
+		? NodeDefinition<K & string, Nodes[K]['input'], Nodes, Strict, Context>
+		: never
+}[keyof Nodes][]
 
 type $InnerCompatibilities<
-	Type extends SupportedZodTypes,
+	Type extends $ZodType,
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
-	CustomCompatabilities extends CustomCompatibility[],
-> = Type extends z.ZodArray<infer Element extends SupportedZodTypes>
-	? [z.ZodArray<Compatibilities<Element, Nodes, Strict, CustomCompatabilities>>]
-	: Type extends z.ZodObject<
-				infer Fields extends Record<string, SupportedZodTypes>
-			>
+	Context extends Record<string, $ZodType> | undefined
+> = Type extends z.ZodArray<infer Element extends $ZodType>
+	? [z.ZodArray<$Compatibilities<Element, Nodes, Strict, Context>>]
+	: Type extends z.ZodObject<infer Fields extends Record<string, $ZodType>>
 		? [
 				z.ZodObject<{
-					[K in keyof Fields]: Compatibilities<
-						Fields[K],
-						Nodes,
-						Strict,
-						CustomCompatabilities
-					>;
-				}>,
+					[K in keyof Fields]: Compatibilities<Fields[K], Nodes, Strict, Context>
+				}>
 			]
-		: Type extends z.ZodUnion<
-					infer Options extends readonly SupportedZodTypes[]
-				>
+		: Type extends z.ZodUnion<infer Options extends readonly $ZodType[]>
 			? [
 					z.ZodUnion<{
-						[I in keyof Options]: Compatibilities<
-							Options[I],
-							Nodes,
-							Strict,
-							CustomCompatabilities
-						>;
-					}>,
+						[I in keyof Options]: Compatibilities<Options[I], Nodes, Strict, Context>
+					}>
 				]
-			: [];
+			: []
 
-type $AdditionalCompatabilities<
-	Type extends SupportedZodTypes,
-	AdditionalCompatabilities extends CustomCompatibility[],
-> = [
-	AdditionalCompatabilities[number] extends infer AdditionalCompatability
-		? AdditionalCompatability extends CustomCompatibility
-			? IsCompatible<AdditionalCompatability["type"], Type> extends true
-				? AdditionalCompatability["compatibilities"][number]
+type $ContextCompatibilities<
+	Type extends $ZodType,
+	Context extends Record<string, $ZodType> | undefined
+> = Context extends Record<string, $ZodType>
+	? {
+			[K in keyof Context]: ShapeOf<Context[K]> extends ShapeOf<Type>
+				? z.ZodLiteral<K & string>
 				: never
-			: never
-		: never,
-];
+		}[keyof Context][]
+	: []
 
-export type Compatibilities<
-	Type extends SupportedZodTypes,
+type $StrictCompatibilities<Type extends $ZodType, Strict extends boolean> = Type extends Branded<
+	infer _Inner,
+	infer _Name,
+	infer StrictOverride
+>
+	? StrictOverride extends true
+		? []
+		: [Type]
+	: Strict extends true
+		? []
+		: [Type]
+
+export type $Compatibilities<
+	Type extends $ZodType,
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
-	AdditionalCompatabilities extends CustomCompatibility[],
+	Context extends Record<string, $ZodType> | undefined
 > = z.ZodUnion<
 	[
-		...$InnerCompatibilities<Type, Nodes, Strict, AdditionalCompatabilities>,
-		...$NodeCompatibilities<Type, Nodes, Strict, AdditionalCompatabilities>,
-		...$AdditionalCompatabilities<Type, AdditionalCompatabilities>,
-		...(Strict extends true ? [] : [Type]),
+		...$ContextCompatibilities<Type, Context>,
+		...$NodeCompatibilities<Type, Nodes, Strict, Context>,
+		...$InnerCompatibilities<Type, Nodes, Strict, Context>,
+		...$StrictCompatibilities<Type, Strict>
 	]
->;
+>
 
-/* --------- MAIN CAST --------- */
+export type Compatibilities<
+	Type extends $ZodType,
+	Nodes extends Record<string, Node>,
+	Strict extends boolean,
+	Context extends Record<string, $ZodType> | undefined
+> = Context extends Record<string, $ZodType>
+	? $Compatibilities<Type, Nodes, Strict, Context>
+	: Type extends Scoped<infer Inner, infer _Name, infer Context>
+		? $Compatibilities<Inner, Nodes, Strict, Context>
+		: $Compatibilities<Type, Nodes, Strict, undefined>
 
 export type NodeDefinition<
 	Name extends string,
-	Input extends SupportedZodTypes,
+	Input extends $ZodType,
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
-	AdditionalCompatabilities extends CustomCompatibility[],
-> = z.ZodObject<
+	Context extends Record<string, $ZodType> | undefined = undefined
+> = ZodObject<
 	{
-		node: z.ZodLiteral<Name>;
-		input: Compatibilities<Input, Nodes, Strict, AdditionalCompatabilities>;
+		node: $ZodLiteral<Name>
+		input: Compatibilities<Input, Nodes, Strict, Context>
 	},
 	$strict
->;
+>

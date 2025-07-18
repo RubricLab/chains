@@ -1,3 +1,4 @@
+- [2025-07-18] [cleanup, use @/shapes](https://github.com/RubricLab/chains/commit/4cdfa583df69796db9796d555e51e2bf87a67a57)
 - [2025-07-17] [scoped, branded, custom major build](https://github.com/RubricLab/chains/commit/d2c1f59ed25ccd7e42c1bf809d6ac7beb3f9543f)
 - [2025-07-16] [stash](https://github.com/RubricLab/chains/commit/97ab1280dc25a973a2dc3450b7c83df0eecc22d8)
 - [2025-07-16] [stash](https://github.com/RubricLab/chains/commit/9087c853356569705418ca453583df1e86d9886a)
