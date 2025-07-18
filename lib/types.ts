@@ -1,6 +1,6 @@
 import type { Branded, Node, Scoped, ShapeOf } from '@rubriclab/shapes'
-import type { ZodObject, z } from 'zod/v4'
-import type { $strict, $ZodLiteral, $ZodObject, $ZodType } from 'zod/v4/core'
+import type { ZodArray, ZodLiteral, ZodObject, ZodUnion } from 'zod/v4'
+import type { $strict, $ZodLiteral, $ZodType } from 'zod/v4/core'
 
 export type IsCompatible<
 	Out extends $ZodType,
@@ -23,17 +23,17 @@ type $InnerCompatibilities<
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
 	Context extends Record<string, $ZodType> | undefined
-> = Type extends z.ZodArray<infer Element extends $ZodType>
-	? [z.ZodArray<$Compatibilities<Element, Nodes, Strict, Context>>]
-	: Type extends z.ZodObject<infer Fields extends Record<string, $ZodType>>
+> = Type extends ZodArray<infer Element extends $ZodType>
+	? [ZodArray<$Compatibilities<Element, Nodes, Strict, Context>>]
+	: Type extends ZodObject<infer Fields extends Record<string, $ZodType>>
 		? [
-				z.ZodObject<{
+				ZodObject<{
 					[K in keyof Fields]: Compatibilities<Fields[K], Nodes, Strict, Context>
 				}>
 			]
-		: Type extends z.ZodUnion<infer Options extends readonly $ZodType[]>
+		: Type extends ZodUnion<infer Options extends readonly $ZodType[]>
 			? [
-					z.ZodUnion<{
+					ZodUnion<{
 						[I in keyof Options]: Compatibilities<Options[I], Nodes, Strict, Context>
 					}>
 				]
@@ -44,9 +44,7 @@ type $ContextCompatibilities<
 	Context extends Record<string, $ZodType> | undefined
 > = Context extends Record<string, $ZodType>
 	? {
-			[K in keyof Context]: ShapeOf<Context[K]> extends ShapeOf<Type>
-				? z.ZodLiteral<K & string>
-				: never
+			[K in keyof Context]: ShapeOf<Context[K]> extends ShapeOf<Type> ? ZodLiteral<K & string> : never
 		}[keyof Context][]
 	: []
 
@@ -67,7 +65,7 @@ export type $Compatibilities<
 	Nodes extends Record<string, Node>,
 	Strict extends boolean,
 	Context extends Record<string, $ZodType> | undefined
-> = z.ZodUnion<
+> = ZodUnion<
 	[
 		...$ContextCompatibilities<Type, Context>,
 		...$NodeCompatibilities<Type, Nodes, Strict, Context>,
