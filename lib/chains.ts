@@ -3,6 +3,21 @@ import { type ZodType, z } from 'zod/v4'
 import type { $ZodType, $ZodTypes } from 'zod/v4/core'
 import type { NodeDefinition } from './types'
 
+function resolve(t: $ZodType): $ZodType {
+	const def = (t as $ZodTypes)._zod.def
+	switch (def.type) {
+		case 'lazy': {
+			return resolve(def.getter())
+		}
+		default: {
+			return t
+		}
+	}
+}
+
+function isNever(t: $ZodType): boolean {
+	return (resolve(t) as $ZodTypes)._zod.def.type === 'never'
+}
 export function createChain<Nodes extends Record<string, Node>, Strict extends boolean>(
 	nodes: Nodes,
 	config?: { strict: Strict }
@@ -23,27 +38,24 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 	}
 
 	function getCompatible(type: $ZodType, scope?: Scope): $ZodType {
-		if (!compatibilities[shapeOf(type, scope)]) {
-			walk(type, scope)
-		}
-
 		return compatibilities[shapeOf(type, scope)] ?? (undefined as never)
 	}
 
 	function createDefinition({ name, scope }: { name: keyof Nodes & string; scope?: Scope }) {
-		definitions[scope ? `scoped(${scope.name},${name})` : name] =
+		const input = getCompatible((nodes[name] ?? (undefined as never)).input, scope)
+		const key = scope ? `scoped(${scope.name},${name})` : name
+		if (isNever(input)) {
+			console.warn('No entry for definition: ', key)
+			return undefined
+		}
+		definitions[key] =
 			// biome-ignore assist/source/useSortedKeys: node first is more intuitive
 			z.strictObject({
 				node: z.literal(name),
-				get input() {
-					return getCompatible((nodes[name] ?? (undefined as never)).input, scope)
-				}
+				input
 			})
 
-		// warm
-		getCompatible((nodes[name] ?? (undefined as never)).input, scope)
-
-		return definitions[scope ? `scoped(${scope.name},${name})` : name]
+		return definitions[key]
 	}
 
 	function getCompatibleDefinitions(type: $ZodType, scope?: Scope) {
@@ -62,19 +74,24 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 		const def = (type as $ZodTypes)._zod.def
 		switch (def.type) {
 			case 'array': {
-				return [z.array(getCompatible(def.element, scope))]
+				const compat = getCompatible(def.element, scope)
+
+				return isNever(compat) ? [] : [z.array(getCompatible(def.element, scope))]
 			}
 			case 'object': {
-				return [
-					z.strictObject(
-						Object.fromEntries(
-							Object.entries(def.shape).map(([key, value]) => [key, getCompatible(value, scope)])
-						)
-					)
-				]
+				const fields = Object.entries(def.shape).map(
+					([key, value]) => [key, getCompatible(value, scope)] as const
+				)
+				return fields.find(field => isNever(field[1]))
+					? []
+					: [z.strictObject(Object.fromEntries(fields))]
 			}
 			case 'union': {
-				return [z.union(def.options.map(option => getCompatible(option, scope)))]
+				const options = def.options
+					.map(option => getCompatible(option, scope))
+					.filter(option => !isNever(option))
+
+				return options.length ? [z.union(options)] : []
 			}
 			default: {
 				return []
@@ -84,16 +101,18 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 
 	function getSchema(type: $ZodType, scope?: Scope) {
 		const _strict = type._zod.def.brand?.strict ?? strict
-		const branches = [
-			...getCompatibleDefinitions(type, scope),
-			...getInnerCompatibilities(type, scope),
-			...(scope ? getContextCompatibilities(type, scope) : []),
-			...(_strict ? [] : [type])
-		] as [$ZodType, ...$ZodType[]]
+		const branches = (
+			[
+				...getCompatibleDefinitions(type, scope),
+				...getInnerCompatibilities(type, scope),
+				...(scope ? getContextCompatibilities(type, scope) : []),
+				...(_strict ? [] : [type])
+			] as [$ZodType, ...$ZodType[]]
+		).filter(branch => !isNever(branch))
 
 		if (branches.length === 0) {
-			console.log('HERE!!', shapeOf(type, scope))
-			return z.literal('BUG')
+			console.warn('No compatibilities found for shape: ', shapeOf(type, scope))
+			return z.never()
 		}
 
 		return z.union(branches)
@@ -104,9 +123,6 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 		const scope = _scope ?? def.scope
 
 		compatibilities[shapeOf(type, scope)] = z.lazy(() => getSchema(type, scope))
-
-		// warm
-		getSchema(type, scope)
 
 		switch (def.type) {
 			case 'array': {
@@ -131,7 +147,9 @@ export function createChain<Nodes extends Record<string, Node>, Strict extends b
 	return {
 		compatibilities,
 		definitions: Object.fromEntries(
-			Object.keys(nodes).map(name => [name, createDefinition({ name })])
+			Object.keys(nodes)
+				.map(name => [name, createDefinition({ name })])
+				.filter(([, def]) => def !== undefined)
 		) as unknown as {
 			[K in keyof Nodes]: NodeDefinition<K & string, Nodes[K]['input'], Nodes, Strict>
 		}
