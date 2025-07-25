@@ -1,3 +1,4 @@
+- [2025-07-25] [format chains](https://github.com/RubricLab/chains/commit/0f4832fa76755c072a9a2c86813abe42d8760021)
 - [2025-07-25] [rework scoped shape, support context in drill](https://github.com/RubricLab/chains/commit/fdd44bba0accb530d653c4fa72c1b9344b550633)
 - [2025-07-18] [cleanup](https://github.com/RubricLab/chains/commit/044d6c94f1b20a6317679f45a247c690a3c1e4db)
 - [2025-07-18] [cleanup, use @/shapes](https://github.com/RubricLab/chains/commit/4cdfa583df69796db9796d555e51e2bf87a67a57)
